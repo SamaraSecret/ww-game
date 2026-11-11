@@ -9,7 +9,9 @@ Play it at **https://samarasecret.github.io/ww-game/**
 - **Missions**: spend nerve on Recon Patrols, Supply Raids, Sabotage, Convoy Ambushes and more. Failure can wound you or land you in the stockade.
 - **Battlefield**: attack NPC training targets or other soldiers (level 3+). Combat is resolved on the server as a round-by-round battle log.
 - **Army Command**: build a personal force.
-  - *Troops*: recruit infantry with cash and a little energy. Max force size grows with level, and each recruit costs more as the force grows.
+  - *Troops*: every level-up grants **+2 free troops** (up to **300 free troops** in total). Everything beyond that is
+    bought with cash in **Supplies** (each recruit costs a little more as the force grows, plus a little energy).
+    The absolute maximum army size is **1,000 troops**.
   - *Army weapons*: Rifles, Machine Guns, Mortars, Anti-tank Rockets, Flamethrowers. Each troop carries one weapon (best first).
   - *Vehicles*: Jeep, Armored Car, Light Tank, Artillery, Heavy Tank, Fighter Plane, Bomber, Destroyer. Level requirements,
     a per-type cap that grows with level, wear from battles, repairs for cash and a partial refund when sold.
@@ -20,7 +22,12 @@ Play it at **https://samarasecret.github.io/ww-game/**
 - **Bank**: keep your cash safe from attackers (1% deposit fee).
 - **Armies**: found, join or leave a faction.
 - **Soldiers, Leaderboards, Events and Radio Chat**.
-- **Admin panel** (shown only to admin accounts after a normal login, enforced on the server): player list, ban/unban, give/take cash, reset a player, global announcements, recent events.
+- **Admin panel** (shown only to admin accounts after a normal login, enforced on the server):
+  - *Command Powers* on the admin's own soldier: instant refill, instant release, set stats/level, grant cash/troops/
+    weapons/vehicles, Immortal mode, God strike, and Command Orders broadcast to every player's Events.
+  - The admin is hidden from the Battlefield, Soldiers list and leaderboards and appears as "Command HQ" to players.
+  - Every admin action is written to an admin-only audit log.
+  - Player management: player list, ban/unban, give/take cash, reset a player, global announcements, recent events.
 
 Energy regenerates +5 every 5 minutes (max 100), nerve +1 every 5 minutes (max 10), health +10% every 5 minutes.
 
@@ -34,7 +41,11 @@ Energy regenerates +5 every 5 minutes (max 100), nerve +1 every 5 minutes (max 1
   and the public roles have no table privileges at all. They can only execute the game's RPC functions.
 - Every action is validated on the server, with row locks to prevent double-spending.
 - Passwords are stored as bcrypt hashes. Login sessions use random tokens, and only a SHA-256 hash of each token is stored.
-  Sessions expire after 7 days. After 5 wrong passwords, the account is locked for 5 minutes.
+  Sessions expire after 7 days.
+- Login throttling never lets a stranger lock out the real owner: failures are counted per *(username + device)* and per
+  *device* (a random id stored in the browser, never an IP). A username under heavy attack is only slowed by ~2 seconds
+  per attempt, never locked. Every failed login, for real or unknown usernames, returns the same generic message.
+- Registration is limited per device (3 per hour) with a high global safety cap.
 - Other players can only see public info: username, level, rank, army, status, win/loss record and join date.
   Cash, bank, exact battle stats, force size, army inventory and events are private.
 - Staff-like usernames (admin, mod, gm, staff, system, ...) cannot be registered.
@@ -42,4 +53,5 @@ Energy regenerates +5 every 5 minutes (max 100), nerve +1 every 5 minutes (max 1
 - The Supabase key in `config.js` is the *publishable* key, which is meant to be public. No secret keys, passwords or
   player data are in this repository.
 - Limitations: this is a hobby game. There is no password reset (there is no email), no CAPTCHA, and the per-account
-  lockout means someone could deliberately lock another player out for 5 minutes. Don't reuse a password from another site.
+  device id lives in the browser, so a determined attacker can rotate it (they are then only slowed, not stopped).
+  Don't reuse a password from another site.
