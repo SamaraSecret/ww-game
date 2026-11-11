@@ -76,3 +76,7 @@ th{color:var(--muted);font-weight:normal;font-size:12px;text-transform:uppercase
 .item-cell{display:flex;gap:10px;align-items:flex-start}
 .item-cell .meta{min-width:0}
 .eq-line{display:flex;align-items:center;gap:8px}
+
+/* Utility classes used instead of inline styles (keeps CSP style-src 'self') */
+.mt6{margin-top:6px}.mt8{margin-top:8px}.mt10{margin-top:10px}.mb8{margin-bottom:8px}.mb10{margin-bottom:10px}
+.mw80{max-width:80px}.mw90{max-width:90px}.mw120{max-width:120px}.mw130{max-width:130px}.mw200{max-width:200px}

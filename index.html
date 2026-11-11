@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Iron Front: World War</title>
 <meta name="description" content="A text-based multiplayer World War strategy game.">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src https://gmkpyzazzwwigmxytfgn.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://gmkpyzazzwwigmxytfgn.supabase.co; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -20,7 +21,7 @@
     <form id="auth-form" autocomplete="on">
       <p id="auth-hint" class="muted">Welcome back, soldier.</p>
       <label>Username <input id="auth-user" name="username" autocomplete="username" maxlength="16" required></label>
-      <label>Password <input id="auth-pass" name="password" type="password" autocomplete="current-password" maxlength="72" required></label>
+      <label>Password <input id="auth-pass" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="72" required></label>
       <button id="auth-submit" class="btn primary" type="submit">Log in</button>
       <p id="auth-msg" class="msg"></p>
     </form>
@@ -57,7 +58,7 @@
   </div>
 </div>
 <div id="toast" class="toast hidden"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="vendor/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
 </body>

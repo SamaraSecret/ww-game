@@ -4,19 +4,39 @@
   const cfg = window.WW_CONFIG;
   const sb = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: false, autoRefreshToken: false } });
   const $ = (id) => document.getElementById(id);
-  const mem = {};
-  const store = {
-    get(k) { try { return localStorage.getItem(k); } catch (e) { return mem[k] || null; } },
-    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { mem[k] = v; } },
-    del(k) { try { localStorage.removeItem(k); } catch (e) { delete mem[k]; } }
-  };
-  let token = store.get('ww_token');
+  const mem = { ls: {}, ss: {} };
+  const wrap = (which) => ({
+    get(k) {
+      try { return (which === 'ss' ? sessionStorage : localStorage).getItem(k); }
+      catch (e) { return mem[which][k] || null; }
+    },
+    set(k, v) {
+      try { (which === 'ss' ? sessionStorage : localStorage).setItem(k, v); }
+      catch (e) { mem[which][k] = v; }
+    },
+    del(k) {
+      try { (which === 'ss' ? sessionStorage : localStorage).removeItem(k); }
+      catch (e) { delete mem[which][k]; }
+    }
+  });
+  const ls = wrap('ls');
+  const ss = wrap('ss');
+  // Players persist in localStorage so they stay signed in. Admin tokens live in
+  // sessionStorage so closing the tab drops the client copy (the server still
+  // expires admin sessions after 2 hours idle or 12 hours maximum).
+  function readToken() { return ss.get('ww_token') || ls.get('ww_token'); }
+  function writeToken(tok, isAdmin) {
+    if (isAdmin) { ss.set('ww_token', tok); ls.del('ww_token'); }
+    else { ls.set('ww_token', tok); ss.del('ww_token'); }
+  }
+  function clearToken() { ss.del('ww_token'); ls.del('ww_token'); }
+  let token = readToken();
   // Random per-browser device id, used only for login throttling (no IPs are stored).
-  let device = store.get('ww_device');
+  let device = ls.get('ww_device');
   if (!device || !/^[0-9a-f]{32}$/.test(device)) {
     const b = new Uint8Array(16); crypto.getRandomValues(b);
     device = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
-    store.set('ww_device', device);
+    ls.set('ww_device', device);
   }
   let me = null;
   let timers = [];
@@ -28,7 +48,6 @@
       const v = attrs[k];
       if (v == null || v === false) continue;
       if (k === 'class') el.className = v;
-      else if (k === 'style') el.style.cssText = v;
       else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
       else if (k === 'text') el.textContent = v;
       else el.setAttribute(k, v === true ? '' : v);
@@ -60,8 +79,13 @@
     return data;
   }
   async function act(fn, args, after) {
-    try { const d = await call(fn, args); if (d && d.message) toast(d.message); if (after) await after(d); return d; }
-    catch (e) { toast(e.message, true); return null; }
+    try {
+      const d = await call(fn, args);
+      if (d && d.reauth) { logoutLocal(d.message || 'Please log in again.'); return d; }
+      if (d && d.message) toast(d.message);
+      if (after) await after(d);
+      return d;
+    } catch (e) { toast(e.message, true); return null; }
   }
 
   // ---------- auth ----------
@@ -70,7 +94,7 @@
     authMode = m;
     ['login', 'register'].forEach((x) => $('tab-' + x).classList.toggle('active', x === m));
     $('auth-submit').textContent = m === 'register' ? 'Register' : 'Log in';
-    $('auth-hint').textContent = m === 'register' ? 'Pick a username (3-16 letters, numbers, _) and a password (6+ characters).'
+    $('auth-hint').textContent = m === 'register' ? 'Pick a username (3-16 letters, numbers, _) and a password (8+ characters, not a common one).'
       : 'Welcome back, soldier.';
     $('auth-pass').setAttribute('autocomplete', m === 'register' ? 'new-password' : 'current-password');
     $('auth-msg').textContent = '';
@@ -85,7 +109,7 @@
       const { data, error } = await sb.rpc(authMode === 'register' ? 'register' : 'login', { p_username: u, p_password: p, p_device: device });
       if (error) throw new Error(error.message);
       if (data.error) throw new Error(data.error);
-      token = data.token; store.set('ww_token', token);
+      token = data.token; writeToken(token, !!data.is_admin);
       const m = await call('get_me'); setMe(m);
       $('auth-pass').value = '';
       startGame('home');
@@ -94,7 +118,7 @@
   });
 
   function logoutLocal(reason) {
-    token = null; me = null; store.del('ww_token');
+    token = null; me = null; clearToken();
     timers.forEach(clearInterval); timers = [];
     $('game').classList.add('hidden'); $('auth').classList.remove('hidden');
     setAuthMode('login');
@@ -105,6 +129,7 @@
   function setBar(id, v, max) { $(id).style.width = Math.max(0, Math.min(100, (v / max) * 100)) + '%'; }
   function setMe(m) {
     me = m; me._at = Date.now();
+    if (token) writeToken(token, !!m.is_admin);
     $('sb-name').textContent = m.username; $('sb-rank').textContent = m.rank;
     $('sb-level').textContent = m.level; $('sb-cash').textContent = money(m.cash);
     const pts = $('sb-pts'); if (pts) pts.textContent = num(m.stat_points);
@@ -134,7 +159,7 @@
     ['home', 'Home'], ['training', 'Training Camp'], ['missions', 'Missions'], ['battlefield', 'Battlefield'], ['command', 'Army Command'],
     ['hospital', 'Field Hospital'], ['armory', 'Armory'], ['bank', 'Bank'], ['army', 'Army'],
     ['players', 'Soldiers'], ['leaderboards', 'Leaderboards'], ['events', 'Events'], ['chat', 'Radio Chat'],
-    ['settings', 'Settings']
+    ['settings', 'Security']
   ];
   function renderNav() {
     const nav = $('nav'); nav.textContent = '';
@@ -223,7 +248,7 @@
     main.appendChild(h('div', { class: 'notice' },
       h('b', null, 'Stat points: '), ptsLabel, ' unspent. Every level-up grants 5 points. Spend them below, or keep drilling with energy.'));
     main.appendChild(h('p', { class: 'muted' }, 'Each drill costs 5 energy. Gains shrink as a stat grows, and every session has a little luck.'));
-    const times = h('input', { type: 'number', min: '1', max: '20', value: '1', style: 'max-width:90px' });
+    const times = h('input', { type: 'number', min: '1', max: '20', value: '1', class: 'mw90' });
     const grid = h('div', { class: 'grid' });
     const stats = [['str', 'Strength', 'Hit harder in battle.'], ['def', 'Defense', 'Take less damage.'], ['spd', 'Speed', 'Strike first and land more hits.'], ['dex', 'Dexterity', 'Dodge attacks and succeed at missions.']];
     const vals = {};
@@ -239,7 +264,7 @@
     for (const [k, label, desc] of stats) {
       vals[k] = h('div', { class: 'stat-big' }, num(me[k]));
       grid.appendChild(h('div', { class: 'panel' }, h('h3', null, label), vals[k], h('p', { class: 'muted small' }, desc),
-        h('div', { class: 'inline', style: 'margin-bottom:8px' },
+        h('div', { class: 'inline mb8' },
           h('button', { class: 'btn small primary', onclick: () => spend(k, 1) }, '+1'),
           h('button', { class: 'btn small primary', onclick: () => spend(k, 5) }, '+5'),
           h('button', { class: 'btn small primary', onclick: () => spend(k, 10) }, '+10'),
@@ -315,7 +340,7 @@
         h('span', null, 'Attack'), h('span', null, num(pw.attack)), h('span', null, 'Defense'), h('span', null, num(pw.defense))),
         h('p', { class: 'muted small' }, 'Army power boosts your battle damage (up to +50%) and blunts the enemy\'s. Only your force class is public.'))));
     // Recruit
-    const cnt = h('input', { type: 'number', min: '1', max: '1000', placeholder: 'Troops', style: 'max-width:120px' });
+    const cnt = h('input', { type: 'number', min: '1', max: '1000', placeholder: 'Troops', class: 'mw120' });
     main.appendChild(h('div', { class: 'notice' }, h('b', null, 'Free troops: '), '+2 troops every level-up (' + num(me.troops_free_granted) + ' / 300 free troops received). ',
       'Everything beyond that is bought in Supplies, up to a maximum army size of 1,000 troops.'));
     main.appendChild(h('h2', null, 'Supplies'));
@@ -329,7 +354,7 @@
     // Weapons
     const wtb = h('tbody');
     a.weapons.forEach((w) => {
-      const q = h('input', { type: 'number', min: '1', value: '10', style: 'max-width:80px' });
+      const q = h('input', { type: 'number', min: '1', value: '10', class: 'mw80' });
       const locked = a.level < w.min_level;
       wtb.appendChild(h('tr', null, h('td', null, itemCell(w.icon, w.name, null, w.description)),
         h('td', null, '+' + w.attack + ' / +' + w.defense), h('td', null, money(w.price)), h('td', null, 'Lv ' + w.min_level), h('td', null, num(w.owned)),
@@ -511,7 +536,7 @@
       main.appendChild(h('h2', null, f.name + ' [' + f.tag + ']'));
       if (f.description) main.appendChild(h('div', { class: 'panel' }, f.description));
       const inIt = me.faction && me.faction.id === f.id;
-      main.appendChild(h('div', { class: 'inline', style: 'margin-bottom:10px' },
+      main.appendChild(h('div', { class: 'inline mb10' },
         !me.faction ? h('button', { class: 'btn primary', onclick: () => act('join_faction', { p_faction: f.id }, () => refreshMe().then(() => go('army/' + f.id))) }, 'Enlist in this army') : null,
         inIt ? h('button', { class: 'btn danger', onclick: () => { if (confirm('Leave ' + f.name + '?')) act('leave_faction', null, () => refreshMe().then(() => go('army'))); } }, 'Leave army') : null,
         h('a', { href: '#army' }, 'All armies')));
@@ -531,17 +556,30 @@
     if (!me.faction) {
       const n = h('input', { placeholder: 'Army name (3-24)', maxlength: '24' }), t = h('input', { placeholder: 'Tag (2-5)', maxlength: '5' }), d = h('input', { placeholder: 'Short description (optional)', maxlength: '300' });
       main.appendChild(h('div', { class: 'panel' }, h('h3', null, 'Found an army ($10,000)'), n, t, d,
-        h('button', { class: 'btn primary', style: 'margin-top:8px', onclick: () => act('create_faction', { p_name: n.value, p_tag: t.value, p_description: d.value }, (r) => refreshMe().then(() => go('army/' + r.id))) }, 'Found army')));
+        h('button', { class: 'btn primary mt8', onclick: () => act('create_faction', { p_name: n.value, p_tag: t.value, p_description: d.value }, (r) => refreshMe().then(() => go('army/' + r.id))) }, 'Found army')));
     }
   };
 
   views.settings = async (main) => {
-    main.appendChild(h('h2', null, 'Settings'));
-    const o = h('input', { type: 'password', placeholder: 'Current password', autocomplete: 'current-password' });
-    const n = h('input', { type: 'password', placeholder: 'New password (6+ characters)', autocomplete: 'new-password' });
-    main.appendChild(h('div', { class: 'panel' }, h('h3', null, 'Change password'), o, n,
-      h('button', { class: 'btn primary', style: 'margin-top:8px', onclick: () => act('change_password', { p_old: o.value, p_new: n.value }, () => { o.value = ''; n.value = ''; }) }, 'Change password')));
-    main.appendChild(h('div', { class: 'panel muted small' }, 'Your data: we store only your username, a scrambled (bcrypt) password hash and your game progress. No email address or IP address is stored.'));
+    main.appendChild(h('h2', null, 'Security'));
+    const o = h('input', { type: 'password', placeholder: 'Current password', autocomplete: 'current-password', minlength: '8', maxlength: '72' });
+    const n = h('input', { type: 'password', placeholder: 'New password (8+ characters)', autocomplete: 'new-password', minlength: '8', maxlength: '72' });
+    const c = h('input', { type: 'password', placeholder: 'Confirm new password', autocomplete: 'new-password', minlength: '8', maxlength: '72' });
+    main.appendChild(h('div', { class: 'panel' },
+      h('h3', null, 'Change password'),
+      h('p', { class: 'muted small' }, 'Use 8-72 characters. Do not reuse a password from another site, and avoid very common passwords. Changing your password signs other devices out. If you are Command Staff, every session including this one ends and you must log in again.'),
+      o, n, c,
+      h('button', { class: 'btn primary mt8', onclick: () => {
+        if (n.value !== c.value) { toast('The new passwords do not match.', true); return; }
+        act('change_password', { p_old: o.value, p_new: n.value }, () => { o.value = ''; n.value = ''; c.value = ''; });
+      } }, 'Change password')));
+    main.appendChild(h('div', { class: 'panel' },
+      h('h3', null, 'Sessions'),
+      h('p', { class: 'muted small' }, 'Sign out on this device from the sidebar. Use the button below to end every session, including this one.'),
+      h('button', { class: 'btn danger', onclick: () => { if (confirm('Sign out on every device?')) act('logout_everywhere'); } }, 'Sign out everywhere')));
+    main.appendChild(h('div', { class: 'panel muted small' },
+      'Your data: we store only your username, a scrambled (bcrypt) password hash and your game progress. No email address or IP address is stored. ',
+      'Player sessions are kept in this browser until they expire (7 days) or you sign out. Command Staff sessions are kept only until you close this tab, and the server ends them after 2 hours idle or 12 hours at most.'));
   };
 
   views.admin = async (main) => {
@@ -549,12 +587,12 @@
     main.appendChild(h('h2', null, 'Admin Panel'));
     const m0 = await call('get_me'); setMe(m0);
     const after = () => go('admin');
-    const fld = (ph, v) => h('input', { type: 'number', placeholder: ph, value: v == null ? '' : String(v), style: 'max-width:130px' });
+    const fld = (ph, v) => h('input', { type: 'number', placeholder: ph, value: v == null ? '' : String(v), class: 'mw130' });
     const sStr = fld('Strength', m0.str), sDef = fld('Defense', m0.def), sSpd = fld('Speed', m0.spd), sDex = fld('Dexterity', m0.dex), sLvl = fld('Level', m0.level);
     const gCash = fld('Cash'), gTroops = fld('Troops'), gWq = fld('Qty'), gVq = fld('Qty');
     const army = await call('get_army');
-    const wSel = h('select', { style: 'max-width:200px' }, army.weapons.map((w) => h('option', { value: String(w.id) }, w.name)));
-    const vSel = h('select', { style: 'max-width:200px' }, army.vehicles.map((v) => h('option', { value: String(v.id) }, v.name)));
+    const wSel = h('select', { class: 'mw200' }, army.weapons.map((w) => h('option', { value: String(w.id) }, w.name)));
+    const vSel = h('select', { class: 'mw200' }, army.vehicles.map((v) => h('option', { value: String(v.id) }, v.name)));
     const ord = h('input', { maxlength: '300', placeholder: 'Command Order sent to every soldier\'s Events inbox' });
     const val = (el) => (el.value === '' ? null : Number(el.value));
     main.appendChild(h('div', { class: 'panel' }, h('h3', null, 'Command Powers (your own soldier)'),
@@ -568,7 +606,7 @@
         h('button', { class: 'btn', onclick: () => act('admin_power_set_stats', { p_str: val(sStr), p_def: val(sDef), p_spd: val(sSpd), p_dex: val(sDex), p_level: val(sLvl) }, after) }, 'Apply')),
       h('h3', null, 'Grant yourself'), h('div', { class: 'inline' }, gCash, gTroops,
         h('button', { class: 'btn', onclick: () => act('admin_power_grant', { p_cash: val(gCash) || 0, p_troops: val(gTroops) || 0 }, after) }, 'Grant cash / troops')),
-      h('div', { class: 'inline', style: 'margin-top:6px' }, wSel, gWq, h('button', { class: 'btn', onclick: () => act('admin_power_grant', { p_weapon: Number(wSel.value), p_weapon_qty: val(gWq) || 0 }, after) }, 'Grant weapons'),
+      h('div', { class: 'inline mt6' }, wSel, gWq, h('button', { class: 'btn', onclick: () => act('admin_power_grant', { p_weapon: Number(wSel.value), p_weapon_qty: val(gWq) || 0 }, after) }, 'Grant weapons'),
         vSel, gVq, h('button', { class: 'btn', onclick: () => act('admin_power_grant', { p_vehicle: Number(vSel.value), p_vehicle_qty: val(gVq) || 0 }, after) }, 'Grant vehicles')),
       h('h3', null, 'Command Order (broadcast)'), h('div', { class: 'inline' }, ord,
         h('button', { class: 'btn primary', onclick: () => act('admin_command_order', { p_message: ord.value }, () => { ord.value = ''; }) }, 'Send order')),
@@ -596,7 +634,7 @@
         h('span', null, 'HP / Energy / Nerve'), h('span', null, p.hp + ' / ' + p.energy + ' / ' + p.nerve), h('span', null, 'Status'), h('span', null, p.status + (p.banned ? ' · BANNED' : '')),
         h('span', null, 'Record'), h('span', null, p.wins + 'W / ' + p.losses + 'L'), h('span', null, 'Failed logins'), h('span', null, p.failed_logins),
         h('span', null, 'Active sessions'), h('span', null, p.sessions), h('span', null, 'Created'), h('span', null, when(p.created_at))),
-        h('div', { class: 'inline', style: 'margin-top:10px' },
+        h('div', { class: 'inline mt10' },
           h('button', { class: 'btn danger', onclick: () => act('admin_set_ban', { p_player: id, p_banned: !p.banned }, () => { load(); showP(id); }) }, p.banned ? 'Unban' : 'Ban'),
           amt, h('button', { class: 'btn', onclick: () => act('admin_adjust_cash', { p_player: id, p_delta: parseInt(amt.value, 10) }, () => { load(); showP(id); }) }, 'Give/take cash'),
           h('button', { class: 'btn danger', onclick: () => { if (confirm('Reset ' + p.username + ' to a fresh level 1 soldier?')) act('admin_reset_player', { p_player: id }, () => { load(); showP(id); }); } }, 'Reset player'))));

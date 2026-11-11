@@ -40,21 +40,24 @@ Energy regenerates +5 every 5 minutes (max 100), nerve +1 every 5 minutes (max 1
   The browser can only call these functions (RPC). It cannot read or write any table directly.
 
 ## Security and privacy notes (honest version)
+See [SECURITY.md](SECURITY.md) for the full write-up. The short version:
 - Game tables live in a private `game` schema that the public API does not expose. Row Level Security is on for every table,
-  and the public roles have no table privileges at all. They can only execute the game's RPC functions.
-- Every action is validated on the server, with row locks to prevent double-spending.
-- Passwords are stored as bcrypt hashes. Login sessions use random tokens, and only a SHA-256 hash of each token is stored.
-  Sessions expire after 7 days.
+  with a deny-all policy, and the public roles have no table privileges at all. They can only execute the listed game RPCs.
+- Every action is validated on the server, with row locks to prevent double-spending and rate limits on expensive or
+  abusive endpoints.
+- Passwords must be 8-72 characters, cannot be a very common choice, and are stored as bcrypt hashes. Change your
+  password (and sign out everywhere) on the in-game **Security** page. Player sessions expire after 7 days. Command Staff
+  sessions last at most 2 hours idle or 12 hours total, and a password change ends every admin session.
 - Login throttling never lets a stranger lock out the real owner: failures are counted per *(username + device)* and per
-  *device* (a random id stored in the browser, never an IP). A username under heavy attack is only slowed by ~2 seconds
-  per attempt, never locked. Every failed login, for real or unknown usernames, returns the same generic message.
-- Registration is limited per device (3 per hour) with a high global safety cap.
+  *device* (a random id stored in the browser, never an IP). Command Staff logins also have a stricter per-device lock
+  and a global failure cap, still with the same generic error.
 - Other players can only see public info: username, level, rank, army, status, win/loss record and join date.
-  Cash, bank, exact battle stats, unspent stat points, force size, army inventory and events are private.
+  Cash, bank, exact battle stats, unspent stat points, force size, army inventory and events are private. The admin
+  account is hidden from public lists and appears as "Command HQ".
 - Staff-like usernames (admin, mod, gm, staff, system, ...) cannot be registered.
 - **No email addresses or IP addresses are collected or stored.**
 - The Supabase key in `config.js` is the *publishable* key, which is meant to be public. No secret keys, passwords or
   player data are in this repository.
-- Limitations: this is a hobby game. There is no password reset (there is no email) and no CAPTCHA. The device id lives
-  in the browser, so a determined attacker can rotate it; they are then only slowed, not stopped.
-  Don't reuse a password from another site.
+- GitHub Pages cannot set HTTP headers; the Content-Security-Policy is a meta tag. Limitations: no password reset (there
+  is no email), no CAPTCHA, and no 2FA. The device id lives in the browser, so a determined attacker can rotate it;
+  they are then only slowed, not stopped. Don't reuse a password from another site.
