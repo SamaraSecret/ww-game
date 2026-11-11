@@ -22,7 +22,7 @@ A GitHub Pages copy also stays up at **https://samarasecret.github.io/ww-game/**
   - *Army Power* boosts battle damage (between x0.6 and x1.5 against the enemy's army), so personal stats still matter.
     Losers lose more troops, and vehicles wear down. Other players only see a coarse *Force class* (Squad ... Division).
 - **Field Hospital & Stockade**: wait out the timer or pay to leave early.
-- **Armory**: buy, equip and sell personal weapons and armor (20 weapons and 12 armor pieces, from a Combat Knife up to a Rail Rifle). Every weapon, armor piece and vehicle has an original in-game icon.
+- **Armory**: buy, equip and sell personal weapons and armor (20 weapons and 12 armor pieces, from a Combat Knife up to a Rail Rifle). Every weapon, armor piece, army weapon and vehicle has an illustrated image (with the original stencil icon as a fallback if the image fails to load).
 - **Bank**: keep your cash safe from attackers (1% deposit fee).
 - **Armies**: found, join or leave a faction.
 - **Soldiers, Leaderboards, Events and Radio Chat**.

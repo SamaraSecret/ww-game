@@ -196,10 +196,26 @@
   }
   function playerLink(p) { return h('a', { href: '#profile/' + p.id }, p.username); }
 
-  // Original in-repo SVG icons only. Slugs are validated so a bad catalog value cannot become a URL.
+  // In-repo illustrated art (assets/items/<slug>.webp). SVG icons stay as the fallback if an image fails.
+  // Slugs are validated so a bad catalog value cannot become a URL.
+  const ITEM_ART = new Set(['am-rifle', 'apc', 'armored-car', 'artillery', 'assault-rifle', 'assault-suit', 'at-launcher', 'at-rockets', 'attack-heli', 'autocannons', 'battle-rifle', 'battleship', 'bolt-rifle', 'bomb-suit', 'bomber', 'carbine', 'ceramic', 'cluster-grenades', 'combat-shotgun', 'comp-helmet', 'cruiser', 'destroyer', 'exo-plate', 'fighter', 'flak', 'flamethrowers', 'grenade-launcher', 'grenades', 'halftrack', 'heavy-mortars', 'heavy-pistol', 'heavy-tank', 'helmet', 'hmg', 'howitzers', 'jacket', 'jeep', 'jet', 'knife', 'light-tank', 'lmg', 'machine-guns', 'marksman', 'medium-tank', 'missile-launchers', 'mortars', 'motorcycle', 'pistol', 'plate-carrier', 'rail-rifle', 'recoilless', 'recoilless-guns', 'rifles', 'riot-shield', 'scout-plane', 'semi-rifle', 'shotguns', 'smg', 'spg', 'submarine', 'transport-heli', 'trench-plate', 'trench-shotgun', 'truck', 'webbing']);
   function itemIcon(slug, name, small) {
     const s = (slug && /^[a-z0-9-]+$/.test(slug)) ? slug : 'unknown';
-    return h('img', { class: 'item-icon' + (small ? ' sm' : ''), src: 'assets/icons/' + s + '.svg', alt: name || '', width: small ? '28' : '40', height: small ? '28' : '40' });
+    const art = ITEM_ART.has(s);
+    const px = small ? '32' : '80';
+    return h('img', {
+      class: 'item-icon' + (small ? ' sm' : ''),
+      src: art ? ('assets/items/' + s + '.webp') : ('assets/icons/' + s + '.svg'),
+      alt: name || '',
+      width: px,
+      height: px,
+      loading: 'lazy',
+      decoding: 'async',
+      onerror: art ? function onItemArtError() {
+        this.removeEventListener('error', onItemArtError);
+        this.setAttribute('src', 'assets/icons/' + s + '.svg');
+      } : null
+    });
   }
   function itemCell(icon, name, extra, desc) {
     return h('div', { class: 'item-cell' }, itemIcon(icon, name),
