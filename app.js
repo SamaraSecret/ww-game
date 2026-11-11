@@ -61,14 +61,14 @@
   let authMode = 'login';
   function setAuthMode(m) {
     authMode = m;
-    ['login', 'register', 'admin'].forEach((x) => $('tab-' + x).classList.toggle('active', x === m));
-    $('auth-submit').textContent = m === 'register' ? 'Enlist' : (m === 'admin' ? 'Admin log in' : 'Log in');
+    ['login', 'register'].forEach((x) => $('tab-' + x).classList.toggle('active', x === m));
+    $('auth-submit').textContent = m === 'register' ? 'Register' : 'Log in';
     $('auth-hint').textContent = m === 'register' ? 'Pick a username (3-16 letters, numbers, _) and a password (6+ characters).'
-      : m === 'admin' ? 'Command Staff only. Admin rights are checked on the server.' : 'Welcome back, soldier.';
+      : 'Welcome back, soldier.';
     $('auth-pass').setAttribute('autocomplete', m === 'register' ? 'new-password' : 'current-password');
     $('auth-msg').textContent = '';
   }
-  ['login', 'register', 'admin'].forEach((m) => $('tab-' + m).addEventListener('click', () => setAuthMode(m)));
+  ['login', 'register'].forEach((m) => $('tab-' + m).addEventListener('click', () => setAuthMode(m)));
   $('auth-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const u = $('auth-user').value.trim(), p = $('auth-pass').value;
@@ -80,11 +80,8 @@
       if (data.error) throw new Error(data.error);
       token = data.token; store.set('ww_token', token);
       const m = await call('get_me'); setMe(m);
-      if (authMode === 'admin' && !m.is_admin) {
-        await sb.rpc('logout', { p_token: token }); logoutLocal('This account is not an administrator.'); return;
-      }
       $('auth-pass').value = '';
-      startGame(authMode === 'admin' ? 'admin' : 'home');
+      startGame('home');
     } catch (err) { msg.textContent = err.message; }
     finally { $('auth-submit').disabled = false; }
   });
@@ -124,7 +121,7 @@
   async function refreshMe() { try { setMe(await call('get_me')); } catch (e) { /* handled */ } }
 
   const pages = [
-    ['home', 'Home'], ['training', 'Training Camp'], ['missions', 'Missions'], ['battlefield', 'Battlefield'],
+    ['home', 'Home'], ['training', 'Training Camp'], ['missions', 'Missions'], ['battlefield', 'Battlefield'], ['command', 'Army Command'],
     ['hospital', 'Field Hospital'], ['armory', 'Armory'], ['bank', 'Bank'], ['army', 'Army'],
     ['players', 'Soldiers'], ['leaderboards', 'Leaderboards'], ['events', 'Events'], ['chat', 'Radio Chat'],
     ['settings', 'Settings']
@@ -132,7 +129,7 @@
   function renderNav() {
     const nav = $('nav'); nav.textContent = '';
     const cur = (location.hash.slice(1) || 'home').split('/')[0];
-    const list = pages.slice(); if (me && me.is_admin) list.push(['admin', 'Command (Admin)']);
+    const list = pages.slice(); if (me && me.is_admin) list.push(['admin', 'Admin Panel']);
     for (const [k, label] of list) {
       nav.appendChild(h('a', { href: '#' + k, class: cur === k ? 'active' : null }, label,
         k === 'events' && me && me.unread > 0 ? h('span', { class: 'badge' }, me.unread) : null));
@@ -176,6 +173,7 @@
       h('div', { class: 'panel' }, h('h3', null, 'Soldier'), h('div', { class: 'kv' },
         h('span', null, 'Name'), h('span', null, m.username), h('span', null, 'Rank'), h('span', null, m.rank),
         h('span', null, 'Level'), h('span', null, m.level), h('span', null, 'Army'), h('span', null, m.faction ? m.faction.name + ' [' + m.faction.tag + ']' : 'None'),
+        h('span', null, 'Force'), h('a', { href: '#command' }, m.force_class + ' · ' + num(m.troops) + ' troops'),
         h('span', null, 'Record'), h('span', null, m.wins + ' wins / ' + m.losses + ' losses'),
         h('span', null, 'Missions'), h('span', null, m.missions_done + ' completed'))),
       h('div', { class: 'panel' }, h('h3', null, 'Finances'), h('div', { class: 'kv' },
@@ -261,6 +259,66 @@
     window.scrollTo(0, 0);
   }
 
+  views.command = async (main) => {
+    main.appendChild(h('h2', null, 'Army Command'));
+    statusNotice(main);
+    const a = await call('get_army');
+    const pw = a.power;
+    main.appendChild(h('div', { class: 'grid' },
+      h('div', { class: 'panel' }, h('h3', null, 'Force'), h('div', { class: 'kv' },
+        h('span', null, 'Force class'), h('b', null, a.force_class),
+        h('span', null, 'Troops'), h('span', null, num(a.troops) + ' / ' + num(a.max_troops)),
+        h('span', null, 'Armed troops'), h('span', null, num(pw.armed) + ' / ' + num(a.troops)),
+        h('span', null, 'Vehicles'), h('span', null, num(pw.vehicles)))),
+      h('div', { class: 'panel' }, h('h3', null, 'Army Power'), h('div', { class: 'stat-big' }, num(pw.power)), h('div', { class: 'kv' },
+        h('span', null, 'Attack'), h('span', null, num(pw.attack)), h('span', null, 'Defense'), h('span', null, num(pw.defense))),
+        h('p', { class: 'muted small' }, 'Army power boosts your battle damage (up to +50%) and blunts the enemy\'s. Only your force class is public.'))));
+    // Recruit
+    const cnt = h('input', { type: 'number', min: '1', max: '1000', placeholder: 'Troops', style: 'max-width:120px' });
+    main.appendChild(h('div', { class: 'panel' }, h('h3', null, 'Recruitment'),
+      h('p', { class: 'muted small' }, 'Max force grows with level. Each recruit costs a bit more as your force grows, plus 1 energy per 20 troops.'),
+      h('div', { class: 'inline' },
+        h('button', { class: 'btn primary', disabled: a.cost10 == null, onclick: () => act('recruit_troops', { p_count: 10 }, () => go('command')) }, 'Recruit 10' + (a.cost10 != null ? ' (' + money(a.cost10) + ')' : '')),
+        h('button', { class: 'btn primary', disabled: a.cost100 == null, onclick: () => act('recruit_troops', { p_count: 100 }, () => go('command')) }, 'Recruit 100' + (a.cost100 != null ? ' (' + money(a.cost100) + ')' : '')),
+        cnt, h('button', { class: 'btn', onclick: () => act('recruit_troops', { p_count: parseInt(cnt.value, 10) }, () => go('command')) }, 'Recruit'),
+        h('button', { class: 'btn danger', onclick: () => { if (confirm('Dismiss ' + (cnt.value || 0) + ' troops? There is no refund.')) act('dismiss_troops', { p_count: parseInt(cnt.value, 10) }, () => go('command')); } }, 'Dismiss'))));
+    // Weapons
+    const wtb = h('tbody');
+    a.weapons.forEach((w) => {
+      const q = h('input', { type: 'number', min: '1', value: '10', style: 'max-width:80px' });
+      const locked = a.level < w.min_level;
+      wtb.appendChild(h('tr', null, h('td', null, h('b', null, w.name), h('div', { class: 'muted small' }, w.description)),
+        h('td', null, '+' + w.attack + ' / +' + w.defense), h('td', null, money(w.price)), h('td', null, 'Lv ' + w.min_level), h('td', null, num(w.owned)),
+        h('td', { class: 'inline' }, q,
+          h('button', { class: 'btn small primary', disabled: locked, onclick: () => act('buy_troop_weapon', { p_weapon: w.id, p_qty: parseInt(q.value, 10) }, () => go('command')) }, 'Buy'),
+          w.owned > 0 ? h('button', { class: 'btn small danger', onclick: () => act('sell_troop_weapon', { p_weapon: w.id, p_qty: parseInt(q.value, 10) }, () => go('command')) }, 'Sell') : null)));
+    });
+    main.appendChild(h('div', { class: 'panel table-wrap' }, h('h3', null, 'Army weapons'),
+      h('p', { class: 'muted small' }, 'Each troop carries one weapon; the best weapons are issued first. Extra weapons sit in storage. Sell for 50%.'),
+      h('table', null, h('thead', null, h('tr', null, ['Weapon', 'Atk / Def per troop', 'Price', 'Req.', 'Owned', ''].map((x) => h('th', null, x)))), wtb)));
+    // Vehicles
+    const vtb = h('tbody');
+    let anyDamaged = false;
+    a.vehicles.forEach((v) => {
+      const locked = a.level < v.min_level;
+      const units = h('div');
+      v.units.forEach((u, i) => {
+        if (u.condition < 100) anyDamaged = true;
+        units.appendChild(h('div', { class: 'inline small' }, '#' + (i + 1) + ' · ' + u.condition + '% condition',
+          u.condition < 100 ? h('button', { class: 'btn small', onclick: () => act('repair_vehicle', { p_unit: u.id }, () => go('command')) }, 'Repair ' + money(u.repair_cost)) : null,
+          h('button', { class: 'btn small danger', onclick: () => { if (confirm('Sell this ' + v.name + ' for ' + money(u.sell_value) + '?')) act('sell_vehicle', { p_unit: u.id }, () => go('command')); } }, 'Sell ' + money(u.sell_value))));
+      });
+      vtb.appendChild(h('tr', null, h('td', null, h('b', null, v.name), h('div', { class: 'muted small' }, v.description), units),
+        h('td', null, v.attack + ' / ' + v.defense), h('td', null, money(v.price)), h('td', null, 'Lv ' + v.min_level),
+        h('td', null, v.units.length + ' / ' + v.cap),
+        h('td', null, h('button', { class: 'btn small primary', disabled: locked || v.units.length >= v.cap, onclick: () => act('buy_vehicle', { p_vehicle: v.id }, () => go('command')) }, locked ? 'Locked' : 'Buy'))));
+    });
+    main.appendChild(h('div', { class: 'panel table-wrap' }, h('h3', null, 'Vehicles'),
+      h('p', { class: 'muted small' }, 'Vehicles wear down in battle and fight at reduced strength until repaired. Selling refunds 40% of the price, scaled by condition. More of each type unlocks as you level up.'),
+      anyDamaged ? h('button', { class: 'btn', onclick: () => act('repair_all_vehicles', null, () => go('command')) }, 'Repair all') : null,
+      h('table', null, h('thead', null, h('tr', null, ['Vehicle', 'Atk / Def', 'Price', 'Req.', 'Owned / cap', ''].map((x) => h('th', null, x)))), vtb)));
+  };
+
   views.hospital = async (main) => {
     main.appendChild(h('h2', null, 'Field Hospital & Stockade'));
     const m = await call('get_me'); setMe(m);
@@ -341,11 +399,12 @@
     main.appendChild(h('div', { class: 'panel' }, h('div', { class: 'kv' },
       h('span', null, 'Rank'), h('span', null, p.rank + (p.staff ? ' · Command Staff' : '') + (p.npc ? ' · Training target' : '')),
       h('span', null, 'Level'), h('span', null, p.level),
+      h('span', null, 'Force class'), h('span', null, p.force),
       h('span', null, 'Army'), p.faction ? h('a', { href: '#army/' + p.faction.id }, p.faction.name + ' [' + p.faction.tag + ']') : h('span', null, 'None'),
       h('span', null, 'Status'), h('span', { class: 'status-' + p.status }, p.status + (p.online ? ' · online' : '')),
       h('span', null, 'Record'), h('span', null, p.wins + ' wins / ' + p.losses + ' losses'),
       h('span', null, 'Enlisted'), h('span', null, p.joined))));
-    main.appendChild(h('p', { class: 'muted small' }, 'Battle stats, cash and bank balances are private.'));
+    main.appendChild(h('p', { class: 'muted small' }, 'Battle stats, force size, cash and bank balances are private.'));
     if (p.id !== me.id && !p.staff && p.status === 'Okay' && (p.npc || p.level >= 3)) {
       const out = h('div');
       main.appendChild(h('button', { class: 'btn danger', onclick: () => attack(p.id, out) }, 'Attack ' + p.username + ' (25 energy)'));
@@ -356,9 +415,9 @@
   views.leaderboards = async (main, kind) => {
     kind = kind || 'level';
     main.appendChild(h('h2', null, 'Leaderboards'));
-    const tabs = [['level', 'Level'], ['wins', 'Battle wins'], ['stats', 'Battle strength'], ['wealth', 'Wealth']];
+    const tabs = [['level', 'Level'], ['wins', 'Battle wins'], ['stats', 'Battle strength'], ['army', 'Army power'], ['wealth', 'Wealth']];
     main.appendChild(h('div', { class: 'tabs' }, tabs.map(([k, l]) => h('button', { class: 'tab' + (k === kind ? ' active' : ''), onclick: () => go('leaderboards/' + k) }, l))));
-    if (kind === 'stats' || kind === 'wealth') main.appendChild(h('p', { class: 'muted small' }, 'Only the order is shown. Exact numbers are private.'));
+    if (kind === 'stats' || kind === 'wealth' || kind === 'army') main.appendChild(h('p', { class: 'muted small' }, 'Only the order is shown. Exact numbers are private.'));
     const list = await call('leaderboard', { p_kind: kind });
     const tb = h('tbody');
     list.forEach((p, i) => tb.appendChild(h('tr', null, h('td', null, '#' + (i + 1)), h('td', null, playerLink(p)), h('td', null, p.rank), h('td', null, p.value == null ? '—' : num(p.value)))));
@@ -442,7 +501,7 @@
 
   views.admin = async (main) => {
     if (!me.is_admin) { main.appendChild(h('div', { class: 'notice red' }, 'Command Staff only.')); return; }
-    main.appendChild(h('h2', null, 'Command (Admin)'));
+    main.appendChild(h('h2', null, 'Admin Panel'));
     const ann = h('input', { maxlength: '300', placeholder: 'Announcement shown on everyone\'s Home page (empty = clear)' });
     main.appendChild(h('div', { class: 'panel' }, h('h3', null, 'Global announcement'), h('div', { class: 'inline' }, ann,
       h('button', { class: 'btn primary', onclick: () => act('admin_announce', { p_message: ann.value }) }, 'Post'))));
