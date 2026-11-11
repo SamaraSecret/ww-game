@@ -1,7 +1,8 @@
 # Iron Front: World War
 
 A text-based, persistent multiplayer World War strategy game in the style of classic browser games such as Torn.
-Play it at **https://samarasecret.github.io/ww-game/**
+Play it at the **Vercel** site once it is listed below (recommended; this is the copy with HTTP security headers).
+A GitHub Pages copy also stays up at **https://samarasecret.github.io/ww-game/**, but that host cannot set those headers.
 
 ## Gameplay
 - **Register** with a username and password, then climb the ranks from Recruit through Field Marshal and beyond. There is no ordinary level cap (a safety ceiling of 1,000,000 avoids overflow).
@@ -35,7 +36,7 @@ Play it at **https://samarasecret.github.io/ww-game/**
 Energy regenerates +5 every 5 minutes (max 100), nerve +1 every 5 minutes (max 10), health +10% every 5 minutes.
 
 ## How it is built and hosted
-- **Frontend**: plain HTML, CSS and JavaScript (no build step) hosted free on **GitHub Pages**.
+- **Frontend**: plain HTML, CSS and JavaScript (no build step). The recommended public site is hosted on **Vercel**, which enforces HTTP security headers (see `vercel.json` and [SECURITY.md](SECURITY.md)). A copy also remains on **GitHub Pages** at https://samarasecret.github.io/ww-game/. Prefer the Vercel link.
 - **Backend**: **Supabase** (Postgres). All game rules live in SQL functions (`supabase/migrations/`).
   The browser can only call these functions (RPC). It cannot read or write any table directly.
 
@@ -58,6 +59,8 @@ See [SECURITY.md](SECURITY.md) for the full write-up. The short version:
 - **No email addresses or IP addresses are collected or stored.**
 - The Supabase key in `config.js` is the *publishable* key, which is meant to be public. No secret keys, passwords or
   player data are in this repository.
-- GitHub Pages cannot set HTTP headers; the Content-Security-Policy is a meta tag. Limitations: no password reset (there
-  is no email), no CAPTCHA, and no 2FA. The device id lives in the browser, so a determined attacker can rotate it;
-  they are then only slowed, not stopped. Don't reuse a password from another site.
+- The Vercel site sets HTTP security headers (including Content-Security-Policy, a ban on embedding the game in other
+  sites, HTTPS-only, and others listed in SECURITY.md). GitHub Pages cannot set those headers; its copy only has a
+  Content-Security-Policy meta tag, and some rules such as `frame-ancestors` do not apply there. Use the Vercel link.
+- Limitations: no password reset (there is no email), no CAPTCHA, and no 2FA. The device id lives in the browser, so a
+  determined attacker can rotate it; they are then only slowed, not stopped. Don't reuse a password from another site.

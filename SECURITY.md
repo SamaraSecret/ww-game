@@ -4,7 +4,7 @@ This document describes how Iron Front protects players and Command Staff, what 
 
 ## How the game is built
 
-- The browser is a static site on GitHub Pages. It can only call named game functions (RPCs) on the Supabase project, using the **publishable** key in `config.js`. That key is designed to be public. It cannot read or write tables.
+- The browser is a static site. The recommended public copy is hosted on **Vercel**, which sets HTTP security headers from `vercel.json`. A GitHub Pages copy also remains online, but that host cannot set those headers, so prefer the Vercel link. The site can only call named game functions (RPCs) on the Supabase project, using the **publishable** key in `config.js`. That key is designed to be public. It cannot read or write tables.
 - All game data lives in a private `game` schema that is not exposed through PostgREST. Row Level Security is on for every game table, with a deny-all policy and no table or sequence privileges for the `anon`, `authenticated`, or `public` roles.
 - Game rules run in `SECURITY DEFINER` functions with `search_path` locked. Internal helpers stay in the `game` schema and are not callable through the API. Only the listed public RPCs are granted to `anon`.
 - The service role / secret key is not in this repository (including git history) and is not used by the frontend.
@@ -18,7 +18,7 @@ This document describes how Iron Front protects players and Command Staff, what 
 
 ### Where the token is stored
 
-- **Players:** `localStorage`, so you stay signed in in this browser until the session expires or you sign out. Convenient, but any XSS bug in the page could read it. We render all player-supplied text as text nodes (never `innerHTML`) and ship a strict Content-Security-Policy meta tag to reduce that risk.
+- **Players:** `localStorage`, so you stay signed in in this browser until the session expires or you sign out. Convenient, but any XSS bug in the page could read it. We render all player-supplied text as text nodes (never `innerHTML`) and ship a strict Content-Security-Policy (HTTP header on Vercel, plus a matching meta tag) to reduce that risk.
 - **Command Staff:** `sessionStorage`, so closing the tab drops the client copy. The server still enforces the idle and maximum lifetimes above.
 - A random device id used only for login throttling is kept in `localStorage`. No IP addresses are stored.
 
@@ -44,9 +44,22 @@ Registration is limited per device, with a global safety cap.
 - There is no separate admin login form. Command Staff use the same login page. The admin username is reserved and is never shown in public lists, leaderboards, the battlefield, hospital lists, or chat (it appears as “Command HQ”). Public profile lookups for that account return “Soldier not found.” Attacks against it fail with the same message as a missing or banned target, so the id cannot be enumerated that way.
 - Players cannot ban, attack, or reset the admin. Admin actions, including viewing the player list or a player’s private sheet, are written to an admin-only audit log.
 
-## What GitHub Pages cannot do
+## HTTP security headers
 
-GitHub Pages cannot set HTTP security headers. The Content-Security-Policy and Referrer-Policy are therefore delivered as `<meta>` tags. Some policies (for example `frame-ancestors`, which would help against clickjacking) only work as HTTP headers and cannot be enforced here.
+The Vercel site sets these headers on every page (see `vercel.json`):
+
+- `Strict-Transport-Security` (HTTPS-only, including subdomains, preload)
+- `Content-Security-Policy` (scripts and styles only from this site, images from this site or `data:`, connections only to this site and the Supabase project, no embedding, no plugins)
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: no-referrer`
+- `Permissions-Policy` (camera, microphone, geolocation and other browser features disabled)
+- `Cross-Origin-Opener-Policy: same-origin`
+- `Cross-Origin-Resource-Policy: same-origin`
+
+The same Content-Security-Policy is also in a `<meta>` tag, without `frame-ancestors` (browsers ignore that directive in meta tags). The two policies are aligned so they do not conflict.
+
+The GitHub Pages copy cannot set HTTP security headers. It only has the meta tag, so `frame-ancestors`, HSTS and the other headers above are not enforced there. Use the Vercel link.
 
 ## Limitations (honest)
 

@@ -1,0 +1,16 @@
+# Keep the Vercel output to the public frontend only
+supabase/
+tools/
+*.md
+.git/
+.gitignore
+.vercel/
+ADMIN_CREDENTIALS*
+*credentials*
+*secret*
+.env
+.env.*
+*.pem
+*.key
+*.log
+node_modules/
