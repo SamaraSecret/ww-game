@@ -3,23 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Iron Front: World War</title>
-<meta name="description" content="A text-based multiplayer World War strategy game.">
+<title>Noir Syndicate</title>
+<meta name="description" content="A text-based multiplayer underworld crime game.">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://gmkpyzazzwwigmxytfgn.supabase.co; base-uri 'none'; form-action 'self'; object-src 'none'; upgrade-insecure-requests">
+<link rel="icon" href="favicon.ico" sizes="any">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="auth" class="auth hidden">
   <div class="auth-box">
-    <h1>&#9733; IRON FRONT &#9733;</h1>
-    <p class="tag">A text-based World War strategy game</p>
+    <img class="auth-banner" src="assets/brand/banner.webp" alt="A white rose and a fedora on a rainy night street overlooking a dark city" width="640" height="360">
+    <div class="auth-title">
+      <img class="auth-emblem" src="assets/brand/emblem.webp" alt="" width="72" height="72">
+      <div>
+        <h1>NOIR SYNDICATE</h1>
+        <p class="tag">A text-based underworld crime game</p>
+      </div>
+    </div>
     <div class="tabs">
       <button id="tab-login" class="tab active" type="button">Player login</button>
       <button id="tab-register" class="tab" type="button">Register</button>
     </div>
     <form id="auth-form" autocomplete="on">
-      <p id="auth-hint" class="muted">Welcome back, soldier.</p>
+      <p id="auth-hint" class="muted">Welcome back.</p>
       <label>Username <input id="auth-user" name="username" autocomplete="username" maxlength="16" required></label>
       <label>Password <input id="auth-pass" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="72" required></label>
       <button id="auth-submit" class="btn primary" type="submit">Log in</button>
@@ -32,7 +39,8 @@
 <div id="game" class="hidden">
   <header class="topbar">
     <button id="menu-btn" class="menu-btn" type="button" aria-label="Menu">&#9776;</button>
-    <span class="logo">&#9733; IRON FRONT</span>
+    <img class="logo-mark" src="assets/brand/emblem.webp" alt="" width="28" height="28">
+    <span class="logo">NOIR SYNDICATE</span>
     <span id="top-user" class="top-user"></span>
   </header>
   <div class="layout">
@@ -41,7 +49,8 @@
         <div class="who"><b id="sb-name"></b> <span id="sb-rank" class="muted"></span></div>
         <div class="row"><span>Level</span><b id="sb-level"></b></div>
         <div class="row"><span>Stat points</span><b id="sb-pts"></b></div>
-        <div class="row"><span>Cash</span><b id="sb-cash" class="money"></b></div>
+        <div class="row"><span>Dirty cash</span><b id="sb-dirty" class="money"></b></div>
+        <div class="row"><span>Clean cash</span><b id="sb-clean" class="money"></b></div>
         <div class="row"><span>Status</span><b id="sb-status"></b></div>
         <div class="bar-label"><span>Energy</span><span id="sb-energy-t"></span></div>
         <div class="bar"><div id="sb-energy" class="fill energy"></div></div>
