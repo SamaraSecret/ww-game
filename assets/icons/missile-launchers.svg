@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="missile-launchers">
+  <defs>
+    <linearGradient id="p-missile-launchers" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a4030"/>
+      <stop offset="1" stop-color="#1c2016"/>
+    </linearGradient>
+    <linearGradient id="r-missile-launchers" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9aa378"/>
+      <stop offset="1" stop-color="#6a7348"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="10" fill="#10120e"/>
+  <rect x="2.5" y="2.5" width="59" height="59" rx="8" fill="url(#p-missile-launchers)" stroke="url(#r-missile-launchers)" stroke-width="1.6"/>
+  <rect x="6" y="6" width="52" height="52" rx="5" fill="none" stroke="#2e3326" stroke-width="0.75" opacity="0.7"/>
+  <circle cx="11" cy="11" r="1.5" fill="#7a8068"/>
+  <circle cx="53" cy="11" r="1.5" fill="#7a8068"/>
+  <circle cx="11" cy="53" r="1.5" fill="#7a8068"/>
+  <circle cx="53" cy="53" r="1.5" fill="#7a8068"/>
+  
+  <rect x="14" y="18" width="8" height="28" rx="2" fill="#8fa34a"/>
+  <rect x="25" y="18" width="8" height="28" rx="2" fill="#8fa34a"/>
+  <rect x="36" y="18" width="8" height="28" rx="2" fill="#8fa34a"/>
+  <polygon points="18,14 22,10 22,14" fill="#c0503a"/>
+  <polygon points="29,14 33,10 33,14" fill="#c0503a"/>
+  <polygon points="40,14 44,10 44,14" fill="#c0503a"/>
+  <rect x="16" y="46" width="26" height="5" fill="#3e4334"/>
+
+</svg>

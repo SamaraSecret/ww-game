@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="plate-carrier">
+  <defs>
+    <linearGradient id="p-plate-carrier" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a4030"/>
+      <stop offset="1" stop-color="#1c2016"/>
+    </linearGradient>
+    <linearGradient id="r-plate-carrier" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9aa378"/>
+      <stop offset="1" stop-color="#6a7348"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="10" fill="#10120e"/>
+  <rect x="2.5" y="2.5" width="59" height="59" rx="8" fill="url(#p-plate-carrier)" stroke="url(#r-plate-carrier)" stroke-width="1.6"/>
+  <rect x="6" y="6" width="52" height="52" rx="5" fill="none" stroke="#2e3326" stroke-width="0.75" opacity="0.7"/>
+  <circle cx="11" cy="11" r="1.5" fill="#7a8068"/>
+  <circle cx="53" cy="11" r="1.5" fill="#7a8068"/>
+  <circle cx="11" cy="53" r="1.5" fill="#7a8068"/>
+  <circle cx="53" cy="53" r="1.5" fill="#7a8068"/>
+  
+  <path d="M20 16 L32 13 L44 16 L47 50 L17 50 Z" fill="#8fa34a"/>
+  <rect x="22" y="24" width="20" height="20" rx="1" fill="#3e4334" stroke="#d7d9c8" stroke-width="1"/>
+  <rect x="24" y="26" width="16" height="7" fill="#8d9178"/>
+  <rect x="24" y="35" width="16" height="7" fill="#8d9178"/>
+  <path d="M20 16 L14 22 L20 26" fill="#8fa34a" stroke="#c4b14a" stroke-width="1"/>
+  <path d="M44 16 L50 22 L44 26" fill="#8fa34a" stroke="#c4b14a" stroke-width="1"/>
+
+</svg>

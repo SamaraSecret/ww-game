@@ -107,12 +107,14 @@
     me = m; me._at = Date.now();
     $('sb-name').textContent = m.username; $('sb-rank').textContent = m.rank;
     $('sb-level').textContent = m.level; $('sb-cash').textContent = money(m.cash);
+    const pts = $('sb-pts'); if (pts) pts.textContent = num(m.stat_points);
     const st = $('sb-status'); st.textContent = m.status; st.className = 'status-' + m.status;
     $('top-user').textContent = m.username + ' · Lv ' + m.level;
     setBar('sb-energy', m.energy, m.max_energy); setBar('sb-nerve', m.nerve, m.max_nerve);
     setBar('sb-hp', m.hp, m.max_hp);
-    setBar('sb-xp', m.xp - m.xp_prev, m.xp_next - m.xp_prev);
-    $('sb-xp-t').textContent = num(m.xp) + ' / ' + num(m.xp_next);
+    const atCap = m.max_level && m.level >= m.max_level;
+    if (atCap) { setBar('sb-xp', 1, 1); $('sb-xp-t').textContent = 'MAX'; }
+    else { setBar('sb-xp', m.xp - m.xp_prev, m.xp_next - m.xp_prev); $('sb-xp-t').textContent = num(m.xp) + ' / ' + num(m.xp_next); }
     $('sb-hp-t').textContent = m.hp + ' / ' + m.max_hp;
     updateTimers();
     renderNav();
@@ -169,6 +171,16 @@
   }
   function playerLink(p) { return h('a', { href: '#profile/' + p.id }, p.username); }
 
+  // Original in-repo SVG icons only. Slugs are validated so a bad catalog value cannot become a URL.
+  function itemIcon(slug, name, small) {
+    const s = (slug && /^[a-z0-9-]+$/.test(slug)) ? slug : 'unknown';
+    return h('img', { class: 'item-icon' + (small ? ' sm' : ''), src: 'assets/icons/' + s + '.svg', alt: name || '', width: small ? '28' : '40', height: small ? '28' : '40' });
+  }
+  function itemCell(icon, name, extra, desc) {
+    return h('div', { class: 'item-cell' }, itemIcon(icon, name),
+      h('div', { class: 'meta' }, h('b', null, name), extra || null, desc ? h('div', { class: 'muted small' }, desc) : null));
+  }
+
   // ---------- views ----------
   const views = {};
 
@@ -189,10 +201,13 @@
       h('div', { class: 'panel' }, h('h3', null, 'Battle stats'), h('div', { class: 'kv' },
         h('span', null, 'Strength'), h('span', null, num(m.str)), h('span', null, 'Defense'), h('span', null, num(m.def)),
         h('span', null, 'Speed'), h('span', null, num(m.spd)), h('span', null, 'Dexterity'), h('span', null, num(m.dex)),
-        h('span', null, 'Total'), h('b', null, num(m.total)))),
+        h('span', null, 'Total'), h('b', null, num(m.total)),
+        h('span', null, 'Unspent points'), h('span', null, num(m.stat_points), ' ', h('a', { href: '#training' }, 'spend →')))),
       h('div', { class: 'panel' }, h('h3', null, 'Equipment'), h('div', { class: 'kv' },
-        h('span', null, 'Weapon'), h('span', null, m.weapon ? m.weapon.name + ' (+' + m.weapon.power + ')' : 'Bare fists'),
-        h('span', null, 'Armor'), h('span', null, m.armor ? m.armor.name + ' (+' + m.armor.power + ')' : 'None')))
+        h('span', null, 'Weapon'), h('span', { class: 'eq-line' }, itemIcon(m.weapon ? m.weapon.icon : 'fists', m.weapon ? m.weapon.name : 'Bare fists', true),
+          m.weapon ? m.weapon.name + ' (+' + m.weapon.power + ')' : 'Bare fists'),
+        h('span', null, 'Armor'), h('span', { class: 'eq-line' }, m.armor ? itemIcon(m.armor.icon, m.armor.name, true) : null,
+          m.armor ? m.armor.name + ' (+' + m.armor.power + ')' : 'None')))
     ));
     const ev = h('div', { class: 'panel' }, h('h3', null, 'Latest events'));
     if (!m.recent_events.length) ev.appendChild(h('p', { class: 'muted' }, 'Nothing yet.'));
@@ -204,14 +219,31 @@
   views.training = async (main) => {
     main.appendChild(h('h2', null, 'Training Camp'));
     statusNotice(main);
+    const ptsLabel = h('b', null, num(me.stat_points));
+    main.appendChild(h('div', { class: 'notice' },
+      h('b', null, 'Stat points: '), ptsLabel, ' unspent. Every level-up grants 5 points. Spend them below, or keep drilling with energy.'));
     main.appendChild(h('p', { class: 'muted' }, 'Each drill costs 5 energy. Gains shrink as a stat grows, and every session has a little luck.'));
     const times = h('input', { type: 'number', min: '1', max: '20', value: '1', style: 'max-width:90px' });
     const grid = h('div', { class: 'grid' });
     const stats = [['str', 'Strength', 'Hit harder in battle.'], ['def', 'Defense', 'Take less damage.'], ['spd', 'Speed', 'Strike first and land more hits.'], ['dex', 'Dexterity', 'Dodge attacks and succeed at missions.']];
     const vals = {};
+    const refreshPts = () => { ptsLabel.textContent = num(me.stat_points); };
+    const spend = (stat, n) => {
+      const have = me.stat_points || 0;
+      const amt = n === 'max' ? have : Math.min(n, have);
+      if (amt < 1) { toast('You have no unspent stat points.', true); return; }
+      const args = { p_str: 0, p_def: 0, p_spd: 0, p_dex: 0 };
+      args['p_' + stat] = amt;
+      return act('spend_stats', args, (d) => { vals[stat].textContent = num(d.me[stat]); refreshPts(); });
+    };
     for (const [k, label, desc] of stats) {
       vals[k] = h('div', { class: 'stat-big' }, num(me[k]));
       grid.appendChild(h('div', { class: 'panel' }, h('h3', null, label), vals[k], h('p', { class: 'muted small' }, desc),
+        h('div', { class: 'inline', style: 'margin-bottom:8px' },
+          h('button', { class: 'btn small primary', onclick: () => spend(k, 1) }, '+1'),
+          h('button', { class: 'btn small primary', onclick: () => spend(k, 5) }, '+5'),
+          h('button', { class: 'btn small primary', onclick: () => spend(k, 10) }, '+10'),
+          h('button', { class: 'btn small', onclick: () => spend(k, 'max') }, 'Max')),
         h('button', { class: 'btn primary', onclick: () => act('train', { p_stat: k, p_times: parseInt(times.value, 10) || 1 }, (d) => { vals[k].textContent = num(d.value); }) }, 'Train ' + label)));
     }
     main.appendChild(h('div', { class: 'panel inline' }, h('span', null, 'Drills per click (1-20):'), times,
@@ -299,7 +331,7 @@
     a.weapons.forEach((w) => {
       const q = h('input', { type: 'number', min: '1', value: '10', style: 'max-width:80px' });
       const locked = a.level < w.min_level;
-      wtb.appendChild(h('tr', null, h('td', null, h('b', null, w.name), h('div', { class: 'muted small' }, w.description)),
+      wtb.appendChild(h('tr', null, h('td', null, itemCell(w.icon, w.name, null, w.description)),
         h('td', null, '+' + w.attack + ' / +' + w.defense), h('td', null, money(w.price)), h('td', null, 'Lv ' + w.min_level), h('td', null, num(w.owned)),
         h('td', { class: 'inline' }, q,
           h('button', { class: 'btn small primary', disabled: locked, onclick: () => act('buy_troop_weapon', { p_weapon: w.id, p_qty: parseInt(q.value, 10) }, () => go('command')) }, 'Buy'),
@@ -320,7 +352,7 @@
           u.condition < 100 ? h('button', { class: 'btn small', onclick: () => act('repair_vehicle', { p_unit: u.id }, () => go('command')) }, 'Repair ' + money(u.repair_cost)) : null,
           h('button', { class: 'btn small danger', onclick: () => { if (confirm('Sell this ' + v.name + ' for ' + money(u.sell_value) + '?')) act('sell_vehicle', { p_unit: u.id }, () => go('command')); } }, 'Sell ' + money(u.sell_value))));
       });
-      vtb.appendChild(h('tr', null, h('td', null, h('b', null, v.name), h('div', { class: 'muted small' }, v.description), units),
+      vtb.appendChild(h('tr', null, h('td', null, itemCell(v.icon, v.name, null, v.description), units),
         h('td', null, v.attack + ' / ' + v.defense), h('td', null, money(v.price)), h('td', null, 'Lv ' + v.min_level),
         h('td', null, v.units.length + ' / ' + v.cap),
         h('td', null, h('button', { class: 'btn small primary', disabled: locked || v.units.length >= v.cap, onclick: () => act('buy_vehicle', { p_vehicle: v.id }, () => go('command')) }, locked ? 'Locked' : 'Buy'))));
@@ -359,7 +391,7 @@
     for (const kind of ['weapon', 'armor']) {
       const tb = h('tbody');
       items.filter((i) => i.kind === kind).forEach((i) => tb.appendChild(h('tr', null,
-        h('td', null, h('b', null, i.name), i.equipped ? h('span', { class: 'money small' }, ' (equipped)') : null, h('div', { class: 'muted small' }, i.description)),
+        h('td', null, itemCell(i.icon, i.name, i.equipped ? h('span', { class: 'money small' }, ' (equipped)') : null, i.description)),
         h('td', null, '+' + i.power), h('td', null, money(i.price)), h('td', null, 'Lv ' + i.min_level), h('td', null, i.owned),
         h('td', { class: 'inline' },
           h('button', { class: 'btn small primary', disabled: me.level < i.min_level, onclick: () => act('buy_item', { p_item: i.id }, () => go('armory')) }, 'Buy'),
@@ -531,7 +563,8 @@
         h('button', { class: 'btn', onclick: () => act('admin_power_release', null, after) }, 'Instant release (hospital / stockade)'),
         h('button', { class: 'btn ' + (m0.immortal ? 'danger' : ''), onclick: () => act('admin_power_toggle', { p_power: 'immortal', p_on: !m0.immortal }, after) }, 'Immortal: ' + (m0.immortal ? 'ON' : 'OFF')),
         h('button', { class: 'btn ' + (m0.god_strike ? 'danger' : ''), onclick: () => act('admin_power_toggle', { p_power: 'god_strike', p_on: !m0.god_strike }, after) }, 'God strike: ' + (m0.god_strike ? 'ON' : 'OFF'))),
-      h('h3', null, 'Set stats and level'), h('div', { class: 'inline' }, sStr, sDef, sSpd, sDex, sLvl,
+      h('h3', null, 'Set stats and level'), h('p', { class: 'muted small' }, 'Levels have no ordinary cap (a safety ceiling of 1,000,000 avoids overflow). Raising your level grants any missing stat points (5 per level-up) and free troops (still capped at 300).'),
+        h('div', { class: 'inline' }, sStr, sDef, sSpd, sDex, sLvl,
         h('button', { class: 'btn', onclick: () => act('admin_power_set_stats', { p_str: val(sStr), p_def: val(sDef), p_spd: val(sSpd), p_dex: val(sDex), p_level: val(sLvl) }, after) }, 'Apply')),
       h('h3', null, 'Grant yourself'), h('div', { class: 'inline' }, gCash, gTroops,
         h('button', { class: 'btn', onclick: () => act('admin_power_grant', { p_cash: val(gCash) || 0, p_troops: val(gTroops) || 0 }, after) }, 'Grant cash / troops')),

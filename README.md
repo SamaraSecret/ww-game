@@ -4,21 +4,24 @@ A text-based, persistent multiplayer World War strategy game in the style of cla
 Play it at **https://samarasecret.github.io/ww-game/**
 
 ## Gameplay
-- **Register** with a username and password, then climb the ranks from Recruit to Field Marshal.
-- **Training Camp**: spend energy to raise Strength, Defense, Speed and Dexterity (diminishing returns).
+- **Register** with a username and password, then climb the ranks from Recruit through Field Marshal and beyond. There is no ordinary level cap (a safety ceiling of 1,000,000 avoids overflow).
+- **Training Camp**: spend energy to raise Strength, Defense, Speed and Dexterity (diminishing returns). Every level-up also grants **5 stat points** you can assign to those four stats. Existing soldiers receive the points for levels they have already earned, once.
 - **Missions**: spend nerve on Recon Patrols, Supply Raids, Sabotage, Convoy Ambushes and more. Failure can wound you or land you in the stockade.
 - **Battlefield**: attack NPC training targets or other soldiers (level 3+). Combat is resolved on the server as a round-by-round battle log.
 - **Army Command**: build a personal force.
   - *Troops*: every level-up grants **+2 free troops** (up to **300 free troops** in total). Everything beyond that is
     bought with cash in **Supplies** (each recruit costs a little more as the force grows, plus a little energy).
     The absolute maximum army size is **1,000 troops**.
-  - *Army weapons*: Rifles, Machine Guns, Mortars, Anti-tank Rockets, Flamethrowers. Each troop carries one weapon (best first).
-  - *Vehicles*: Jeep, Armored Car, Light Tank, Artillery, Heavy Tank, Fighter Plane, Bomber, Destroyer. Level requirements,
-    a per-type cap that grows with level, wear from battles, repairs for cash and a partial refund when sold.
+  - *Army weapons*: Rifles, Grenades, Machine Guns, Combat Shotguns, Mortars, Anti-tank Rockets, Heavy Mortars,
+    Flamethrowers, Recoilless Guns, Autocannons, Howitzers and Missile Launchers. Each troop carries one weapon (best first).
+  - *Vehicles*: Motorcycle, Jeep, Supply Truck, Armored Car, Half-Track, APC, Light Tank, Scout Plane, Medium Tank,
+    Artillery, Self-Propelled Gun, Heavy Tank, Transport Helicopter, Fighter Plane, Attack Helicopter, Bomber,
+    Jet Fighter, Destroyer, Submarine, Cruiser and Battleship. Level requirements, a per-type cap that grows with level,
+    wear from battles, repairs for cash and a partial refund when sold.
   - *Army Power* boosts battle damage (between x0.6 and x1.5 against the enemy's army), so personal stats still matter.
     Losers lose more troops, and vehicles wear down. Other players only see a coarse *Force class* (Squad ... Division).
 - **Field Hospital & Stockade**: wait out the timer or pay to leave early.
-- **Armory**: buy, equip and sell weapons and armor.
+- **Armory**: buy, equip and sell personal weapons and armor (20 weapons and 12 armor pieces, from a Combat Knife up to a Rail Rifle). Every weapon, armor piece and vehicle has an original in-game icon.
 - **Bank**: keep your cash safe from attackers (1% deposit fee).
 - **Armies**: found, join or leave a faction.
 - **Soldiers, Leaderboards, Events and Radio Chat**.
@@ -47,7 +50,7 @@ Energy regenerates +5 every 5 minutes (max 100), nerve +1 every 5 minutes (max 1
   per attempt, never locked. Every failed login, for real or unknown usernames, returns the same generic message.
 - Registration is limited per device (3 per hour) with a high global safety cap.
 - Other players can only see public info: username, level, rank, army, status, win/loss record and join date.
-  Cash, bank, exact battle stats, force size, army inventory and events are private.
+  Cash, bank, exact battle stats, unspent stat points, force size, army inventory and events are private.
 - Staff-like usernames (admin, mod, gm, staff, system, ...) cannot be registered.
 - **No email addresses or IP addresses are collected or stored.**
 - The Supabase key in `config.js` is the *publishable* key, which is meant to be public. No secret keys, passwords or

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="assault-suit">
+  <defs>
+    <linearGradient id="p-assault-suit" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a4030"/>
+      <stop offset="1" stop-color="#1c2016"/>
+    </linearGradient>
+    <linearGradient id="r-assault-suit" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9aa378"/>
+      <stop offset="1" stop-color="#6a7348"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="10" fill="#10120e"/>
+  <rect x="2.5" y="2.5" width="59" height="59" rx="8" fill="url(#p-assault-suit)" stroke="url(#r-assault-suit)" stroke-width="1.6"/>
+  <rect x="6" y="6" width="52" height="52" rx="5" fill="none" stroke="#2e3326" stroke-width="0.75" opacity="0.7"/>
+  <circle cx="11" cy="11" r="1.5" fill="#7a8068"/>
+  <circle cx="53" cy="11" r="1.5" fill="#7a8068"/>
+  <circle cx="11" cy="53" r="1.5" fill="#7a8068"/>
+  <circle cx="53" cy="53" r="1.5" fill="#7a8068"/>
+  
+  <path d="M18 16 L32 12 L46 16 L49 52 L15 52 Z" fill="#8fa34a" stroke="#d7d9c8" stroke-width="1"/>
+  <rect x="22" y="22" width="20" height="22" rx="2" fill="#3e4334"/>
+  <rect x="24" y="24" width="16" height="8" fill="#8d9178"/>
+  <rect x="24" y="34" width="16" height="8" fill="#8d9178"/>
+  <circle cx="32" cy="20" r="5" fill="#8d9178" stroke="#d7d9c8" stroke-width="1"/>
+  <path d="M18 16 L11 28 L18 31" fill="#8d9178"/>
+  <path d="M46 16 L53 28 L46 31" fill="#8d9178"/>
+
+</svg>

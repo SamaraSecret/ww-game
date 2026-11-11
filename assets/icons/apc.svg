@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="apc">
+  <defs>
+    <linearGradient id="p-apc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a4030"/>
+      <stop offset="1" stop-color="#1c2016"/>
+    </linearGradient>
+    <linearGradient id="r-apc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9aa378"/>
+      <stop offset="1" stop-color="#6a7348"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="10" fill="#10120e"/>
+  <rect x="2.5" y="2.5" width="59" height="59" rx="8" fill="url(#p-apc)" stroke="url(#r-apc)" stroke-width="1.6"/>
+  <rect x="6" y="6" width="52" height="52" rx="5" fill="none" stroke="#2e3326" stroke-width="0.75" opacity="0.7"/>
+  <circle cx="11" cy="11" r="1.5" fill="#7a8068"/>
+  <circle cx="53" cy="11" r="1.5" fill="#7a8068"/>
+  <circle cx="11" cy="53" r="1.5" fill="#7a8068"/>
+  <circle cx="53" cy="53" r="1.5" fill="#7a8068"/>
+  
+  <path d="M10 32 L16 22 L50 22 L56 32 L56 42 L10 42 Z" fill="#8fa34a"/>
+  <rect x="20" y="24" width="10" height="8" fill="#3e4334"/>
+  <rect x="32" y="24" width="14" height="8" fill="#3e4334"/>
+  <rect x="12" y="34" width="40" height="5" fill="#3e4334"/>
+  <rect x="16" y="42" width="8" height="5" fill="#3e4334"/>
+  <rect x="28" y="42" width="8" height="5" fill="#3e4334"/>
+  <rect x="40" y="42" width="8" height="5" fill="#3e4334"/>
+  <rect x="44" y="18" width="8" height="5" fill="#d7d9c8"/>
+
+</svg>
