@@ -1,7 +1,7 @@
 # Iron Front: World War
 
 A text-based, persistent multiplayer World War strategy game in the style of classic browser games such as Torn.
-Play it at the **Vercel** site once it is listed below (recommended; this is the copy with HTTP security headers).
+Play it at **https://iron-front-ww.vercel.app/** (recommended; this is the copy with HTTP security headers).
 A GitHub Pages copy also stays up at **https://samarasecret.github.io/ww-game/**, but that host cannot set those headers.
 
 ## Gameplay
@@ -36,7 +36,7 @@ A GitHub Pages copy also stays up at **https://samarasecret.github.io/ww-game/**
 Energy regenerates +5 every 5 minutes (max 100), nerve +1 every 5 minutes (max 10), health +10% every 5 minutes.
 
 ## How it is built and hosted
-- **Frontend**: plain HTML, CSS and JavaScript (no build step). The recommended public site is hosted on **Vercel**, which enforces HTTP security headers (see `vercel.json` and [SECURITY.md](SECURITY.md)). A copy also remains on **GitHub Pages** at https://samarasecret.github.io/ww-game/. Prefer the Vercel link.
+- **Frontend**: plain HTML, CSS and JavaScript (no build step). The recommended public site is **https://iron-front-ww.vercel.app/**, hosted on **Vercel**, which enforces HTTP security headers (see `vercel.json` and [SECURITY.md](SECURITY.md)). A copy also remains on **GitHub Pages** at https://samarasecret.github.io/ww-game/. Prefer the Vercel link.
 - **Backend**: **Supabase** (Postgres). All game rules live in SQL functions (`supabase/migrations/`).
   The browser can only call these functions (RPC). It cannot read or write any table directly.
 

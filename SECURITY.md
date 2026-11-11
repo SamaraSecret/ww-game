@@ -4,7 +4,7 @@ This document describes how Iron Front protects players and Command Staff, what 
 
 ## How the game is built
 
-- The browser is a static site. The recommended public copy is hosted on **Vercel**, which sets HTTP security headers from `vercel.json`. A GitHub Pages copy also remains online, but that host cannot set those headers, so prefer the Vercel link. The site can only call named game functions (RPCs) on the Supabase project, using the **publishable** key in `config.js`. That key is designed to be public. It cannot read or write tables.
+- The browser is a static site. The recommended public copy is **https://iron-front-ww.vercel.app/**, hosted on **Vercel**, which sets HTTP security headers from `vercel.json`. A GitHub Pages copy also remains online at https://samarasecret.github.io/ww-game/, but that host cannot set those headers, so prefer the Vercel link. The site can only call named game functions (RPCs) on the Supabase project, using the **publishable** key in `config.js`. That key is designed to be public. It cannot read or write tables.
 - All game data lives in a private `game` schema that is not exposed through PostgREST. Row Level Security is on for every game table, with a deny-all policy and no table or sequence privileges for the `anon`, `authenticated`, or `public` roles.
 - Game rules run in `SECURITY DEFINER` functions with `search_path` locked. Internal helpers stay in the `game` schema and are not callable through the API. Only the listed public RPCs are granted to `anon`.
 - The service role / secret key is not in this repository (including git history) and is not used by the frontend.
@@ -59,7 +59,7 @@ The Vercel site sets these headers on every page (see `vercel.json`):
 
 The same Content-Security-Policy is also in a `<meta>` tag, without `frame-ancestors` (browsers ignore that directive in meta tags). The two policies are aligned so they do not conflict.
 
-The GitHub Pages copy cannot set HTTP security headers. It only has the meta tag, so `frame-ancestors`, HSTS and the other headers above are not enforced there. Use the Vercel link.
+The GitHub Pages copy cannot set HTTP security headers. It only has the meta tag, so `frame-ancestors`, HSTS and the other headers above are not enforced there. Use https://iron-front-ww.vercel.app/.
 
 ## Limitations (honest)
 
