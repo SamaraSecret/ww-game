@@ -52,6 +52,6 @@ Energy regenerates +5 every 5 minutes (max 100), nerve +1 every 5 minutes (max 1
 - **No email addresses or IP addresses are collected or stored.**
 - The Supabase key in `config.js` is the *publishable* key, which is meant to be public. No secret keys, passwords or
   player data are in this repository.
-- Limitations: this is a hobby game. There is no password reset (there is no email), no CAPTCHA, and the per-account
-  device id lives in the browser, so a determined attacker can rotate it (they are then only slowed, not stopped).
+- Limitations: this is a hobby game. There is no password reset (there is no email) and no CAPTCHA. The device id lives
+  in the browser, so a determined attacker can rotate it; they are then only slowed, not stopped.
   Don't reuse a password from another site.
