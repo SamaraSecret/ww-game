@@ -1,0 +1,498 @@
+'use strict';
+(function () {
+  // ---------- setup ----------
+  const cfg = window.WW_CONFIG;
+  const sb = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const $ = (id) => document.getElementById(id);
+  const mem = {};
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return mem[k] || null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { mem[k] = v; } },
+    del(k) { try { localStorage.removeItem(k); } catch (e) { delete mem[k]; } }
+  };
+  let token = store.get('ww_token');
+  let me = null;
+  let timers = [];
+
+  // Build DOM safely: strings always become text nodes (never HTML).
+  function h(tag, attrs, ...kids) {
+    const el = document.createElement(tag);
+    if (attrs) for (const k in attrs) {
+      const v = attrs[k];
+      if (v == null || v === false) continue;
+      if (k === 'class') el.className = v;
+      else if (k === 'style') el.style.cssText = v;
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else if (k === 'text') el.textContent = v;
+      else el.setAttribute(k, v === true ? '' : v);
+    }
+    for (const c of kids.flat()) {
+      if (c == null || c === false) continue;
+      el.appendChild(typeof c === 'object' ? c : document.createTextNode(String(c)));
+    }
+    return el;
+  }
+  const money = (n) => '$' + Number(n || 0).toLocaleString('en-US');
+  const num = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const when = (t) => { const d = new Date(t); return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+  const mmss = (s) => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+
+  function toast(msg, err) {
+    const t = $('toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : '');
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), 4000);
+  }
+
+  async function call(fn, args) {
+    const { data, error } = await sb.rpc(fn, Object.assign({ p_token: token }, args || {}));
+    if (error) {
+      const m = error.message || 'Request failed';
+      if (/Session expired|Not logged in|banned/i.test(m) && fn !== 'login') { logoutLocal(m); }
+      throw new Error(m);
+    }
+    if (data && data.me) setMe(data.me);
+    return data;
+  }
+  async function act(fn, args, after) {
+    try { const d = await call(fn, args); if (d && d.message) toast(d.message); if (after) await after(d); return d; }
+    catch (e) { toast(e.message, true); return null; }
+  }
+
+  // ---------- auth ----------
+  let authMode = 'login';
+  function setAuthMode(m) {
+    authMode = m;
+    ['login', 'register', 'admin'].forEach((x) => $('tab-' + x).classList.toggle('active', x === m));
+    $('auth-submit').textContent = m === 'register' ? 'Enlist' : (m === 'admin' ? 'Admin log in' : 'Log in');
+    $('auth-hint').textContent = m === 'register' ? 'Pick a username (3-16 letters, numbers, _) and a password (6+ characters).'
+      : m === 'admin' ? 'Command Staff only. Admin rights are checked on the server.' : 'Welcome back, soldier.';
+    $('auth-pass').setAttribute('autocomplete', m === 'register' ? 'new-password' : 'current-password');
+    $('auth-msg').textContent = '';
+  }
+  ['login', 'register', 'admin'].forEach((m) => $('tab-' + m).addEventListener('click', () => setAuthMode(m)));
+  $('auth-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const u = $('auth-user').value.trim(), p = $('auth-pass').value;
+    const msg = $('auth-msg'); msg.className = 'msg'; msg.textContent = 'Please wait...';
+    $('auth-submit').disabled = true;
+    try {
+      const { data, error } = await sb.rpc(authMode === 'register' ? 'register' : 'login', { p_username: u, p_password: p });
+      if (error) throw new Error(error.message);
+      if (data.error) throw new Error(data.error);
+      token = data.token; store.set('ww_token', token);
+      const m = await call('get_me'); setMe(m);
+      if (authMode === 'admin' && !m.is_admin) {
+        await sb.rpc('logout', { p_token: token }); logoutLocal('This account is not an administrator.'); return;
+      }
+      $('auth-pass').value = '';
+      startGame(authMode === 'admin' ? 'admin' : 'home');
+    } catch (err) { msg.textContent = err.message; }
+    finally { $('auth-submit').disabled = false; }
+  });
+
+  function logoutLocal(reason) {
+    token = null; me = null; store.del('ww_token');
+    timers.forEach(clearInterval); timers = [];
+    $('game').classList.add('hidden'); $('auth').classList.remove('hidden');
+    if (reason) { $('auth-msg').className = 'msg'; $('auth-msg').textContent = reason; }
+  }
+
+  // ---------- sidebar ----------
+  function setBar(id, v, max) { $(id).style.width = Math.max(0, Math.min(100, (v / max) * 100)) + '%'; }
+  function setMe(m) {
+    me = m; me._at = Date.now();
+    $('sb-name').textContent = m.username; $('sb-rank').textContent = m.rank;
+    $('sb-level').textContent = m.level; $('sb-cash').textContent = money(m.cash);
+    const st = $('sb-status'); st.textContent = m.status; st.className = 'status-' + m.status;
+    $('top-user').textContent = m.username + ' · Lv ' + m.level;
+    setBar('sb-energy', m.energy, m.max_energy); setBar('sb-nerve', m.nerve, m.max_nerve);
+    setBar('sb-hp', m.hp, m.max_hp);
+    setBar('sb-xp', m.xp - m.xp_prev, m.xp_next - m.xp_prev);
+    $('sb-xp-t').textContent = num(m.xp) + ' / ' + num(m.xp_next);
+    $('sb-hp-t').textContent = m.hp + ' / ' + m.max_hp;
+    updateTimers();
+    renderNav();
+  }
+  function updateTimers() {
+    if (!me) return;
+    const el = (Date.now() - me._at) / 1000;
+    $('sb-energy-t').textContent = me.energy + ' / ' + me.max_energy + (me.energy_next != null ? ' (+5 in ' + mmss(me.energy_next - el) + ')' : '');
+    $('sb-nerve-t').textContent = me.nerve + ' / ' + me.max_nerve + (me.nerve_next != null ? ' (+1 in ' + mmss(me.nerve_next - el) + ')' : '');
+    if ((me.energy_next != null && me.energy_next - el <= 0) || (me.nerve_next != null && me.nerve_next - el <= 0)) {
+      if (!updateTimers._busy) { updateTimers._busy = true; refreshMe().finally(() => { updateTimers._busy = false; }); }
+    }
+  }
+  async function refreshMe() { try { setMe(await call('get_me')); } catch (e) { /* handled */ } }
+
+  const pages = [
+    ['home', 'Home'], ['training', 'Training Camp'], ['missions', 'Missions'], ['battlefield', 'Battlefield'],
+    ['hospital', 'Field Hospital'], ['armory', 'Armory'], ['bank', 'Bank'], ['army', 'Army'],
+    ['players', 'Soldiers'], ['leaderboards', 'Leaderboards'], ['events', 'Events'], ['chat', 'Radio Chat'],
+    ['settings', 'Settings']
+  ];
+  function renderNav() {
+    const nav = $('nav'); nav.textContent = '';
+    const cur = (location.hash.slice(1) || 'home').split('/')[0];
+    const list = pages.slice(); if (me && me.is_admin) list.push(['admin', 'Command (Admin)']);
+    for (const [k, label] of list) {
+      nav.appendChild(h('a', { href: '#' + k, class: cur === k ? 'active' : null }, label,
+        k === 'events' && me && me.unread > 0 ? h('span', { class: 'badge' }, me.unread) : null));
+    }
+    nav.appendChild(h('a', { onclick: async () => { await sb.rpc('logout', { p_token: token }); logoutLocal('Logged out.'); } }, 'Log out'));
+  }
+  $('menu-btn').addEventListener('click', () => $('sidebar').classList.toggle('open'));
+
+  // ---------- routing ----------
+  let pageTimer = null;
+  async function route() {
+    if (!token) return;
+    $('sidebar').classList.remove('open');
+    if (pageTimer) { clearInterval(pageTimer); pageTimer = null; }
+    const [page, arg] = (location.hash.slice(1) || 'home').split('/');
+    renderNav();
+    const host = $('main'); host.textContent = '';
+    const main = h('div'); host.appendChild(main);   // stale renders go to a detached node
+    const fn = views[page] || views.home;
+    try { await fn(main, arg); } catch (e) { main.appendChild(h('div', { class: 'notice red' }, e.message)); }
+  }
+  window.addEventListener('hashchange', route);
+  const go = (p) => { if (location.hash === '#' + p) route(); else location.hash = p; };
+
+  function statusNotice(main) {
+    if (!me) return;
+    if (me.status === 'Hospital') main.appendChild(h('div', { class: 'notice red' }, 'You are in the field hospital until ' + when(me.hospital_until) + '. ', h('a', { href: '#hospital' }, 'Go to hospital')));
+    if (me.status === 'Stockade') main.appendChild(h('div', { class: 'notice red' }, 'You are held in the stockade until ' + when(me.jail_until) + '. ', h('a', { href: '#hospital' }, 'Pay for release')));
+  }
+  function playerLink(p) { return h('a', { href: '#profile/' + p.id }, p.username); }
+
+  // ---------- views ----------
+  const views = {};
+
+  views.home = async (main) => {
+    const m = await call('get_me'); setMe(m);
+    main.appendChild(h('h2', null, 'Headquarters'));
+    if (m.announcement) main.appendChild(h('div', { class: 'notice' }, h('b', null, 'Command announcement: '), m.announcement.message));
+    statusNotice(main);
+    main.appendChild(h('div', { class: 'grid' },
+      h('div', { class: 'panel' }, h('h3', null, 'Soldier'), h('div', { class: 'kv' },
+        h('span', null, 'Name'), h('span', null, m.username), h('span', null, 'Rank'), h('span', null, m.rank),
+        h('span', null, 'Level'), h('span', null, m.level), h('span', null, 'Army'), h('span', null, m.faction ? m.faction.name + ' [' + m.faction.tag + ']' : 'None'),
+        h('span', null, 'Record'), h('span', null, m.wins + ' wins / ' + m.losses + ' losses'),
+        h('span', null, 'Missions'), h('span', null, m.missions_done + ' completed'))),
+      h('div', { class: 'panel' }, h('h3', null, 'Finances'), h('div', { class: 'kv' },
+        h('span', null, 'Cash'), h('span', { class: 'money' }, money(m.cash)), h('span', null, 'Bank'), h('span', { class: 'money' }, money(m.bank)))),
+      h('div', { class: 'panel' }, h('h3', null, 'Battle stats'), h('div', { class: 'kv' },
+        h('span', null, 'Strength'), h('span', null, num(m.str)), h('span', null, 'Defense'), h('span', null, num(m.def)),
+        h('span', null, 'Speed'), h('span', null, num(m.spd)), h('span', null, 'Dexterity'), h('span', null, num(m.dex)),
+        h('span', null, 'Total'), h('b', null, num(m.total)))),
+      h('div', { class: 'panel' }, h('h3', null, 'Equipment'), h('div', { class: 'kv' },
+        h('span', null, 'Weapon'), h('span', null, m.weapon ? m.weapon.name + ' (+' + m.weapon.power + ')' : 'Bare fists'),
+        h('span', null, 'Armor'), h('span', null, m.armor ? m.armor.name + ' (+' + m.armor.power + ')' : 'None')))
+    ));
+    const ev = h('div', { class: 'panel' }, h('h3', null, 'Latest events'));
+    if (!m.recent_events.length) ev.appendChild(h('p', { class: 'muted' }, 'Nothing yet.'));
+    m.recent_events.forEach((e) => ev.appendChild(h('div', { class: 'ev' + (e.seen ? '' : ' unseen') }, h('div', { class: 't' }, when(e.created_at)), e.message)));
+    ev.appendChild(h('a', { href: '#events' }, 'All events →'));
+    main.appendChild(ev);
+  };
+
+  views.training = async (main) => {
+    main.appendChild(h('h2', null, 'Training Camp'));
+    statusNotice(main);
+    main.appendChild(h('p', { class: 'muted' }, 'Each drill costs 5 energy. Gains shrink as a stat grows, and every session has a little luck.'));
+    const times = h('input', { type: 'number', min: '1', max: '20', value: '1', style: 'max-width:90px' });
+    const grid = h('div', { class: 'grid' });
+    const stats = [['str', 'Strength', 'Hit harder in battle.'], ['def', 'Defense', 'Take less damage.'], ['spd', 'Speed', 'Strike first and land more hits.'], ['dex', 'Dexterity', 'Dodge attacks and succeed at missions.']];
+    const vals = {};
+    for (const [k, label, desc] of stats) {
+      vals[k] = h('div', { class: 'stat-big' }, num(me[k]));
+      grid.appendChild(h('div', { class: 'panel' }, h('h3', null, label), vals[k], h('p', { class: 'muted small' }, desc),
+        h('button', { class: 'btn primary', onclick: () => act('train', { p_stat: k, p_times: parseInt(times.value, 10) || 1 }, (d) => { vals[k].textContent = num(d.value); }) }, 'Train ' + label)));
+    }
+    main.appendChild(h('div', { class: 'panel inline' }, h('span', null, 'Drills per click (1-20):'), times,
+      h('button', { class: 'btn small', onclick: () => { times.value = Math.max(1, Math.min(20, Math.floor(me.energy / 5))); } }, 'Use all energy')));
+    main.appendChild(grid);
+  };
+
+  views.missions = async (main) => {
+    main.appendChild(h('h2', null, 'Missions'));
+    statusNotice(main);
+    main.appendChild(h('p', { class: 'muted' }, 'Missions cost nerve. Failure can wound you or land you in the stockade. Dexterity and level improve your odds.'));
+    const out = h('div');
+    const list = await call('list_missions');
+    const tb = h('tbody');
+    list.forEach((m) => tb.appendChild(h('tr', null,
+      h('td', null, h('b', null, m.name), h('div', { class: 'muted small' }, m.description)),
+      h('td', null, m.nerve_cost), h('td', null, 'Lv ' + m.min_level), h('td', null, money(m.cash_min) + '-' + money(m.cash_max)),
+      h('td', null, m.xp), h('td', null, m.locked ? '—' : m.chance + '%'),
+      h('td', null, h('button', { class: 'btn primary small', disabled: m.locked, onclick: () => act('do_mission', { p_mission: m.id }, (d) => {
+        out.textContent = ''; out.appendChild(h('div', { class: 'notice' + (d.result === 'success' ? '' : ' red') }, d.message));
+      }) }, m.locked ? 'Locked' : 'Go')))));
+    main.appendChild(out);
+    main.appendChild(h('div', { class: 'panel table-wrap' }, h('table', null,
+      h('thead', null, h('tr', null, ['Mission', 'Nerve', 'Req.', 'Reward', 'XP', 'Chance', ''].map((x) => h('th', null, x)))), tb)));
+  };
+
+  views.battlefield = async (main) => {
+    main.appendChild(h('h2', null, 'Battlefield'));
+    statusNotice(main);
+    main.appendChild(h('p', { class: 'muted' }, 'Attacking costs 25 energy. The loser is hospitalized; the winner takes a share of their cash and earns XP. Recruits below level 3 are protected, and you can attack the same soldier once every 10 minutes.'));
+    const out = h('div');
+    main.appendChild(out);
+    const list = await call('list_targets');
+    const tb = h('tbody');
+    list.forEach((t) => {
+      const blocked = t.protected || t.status !== 'Okay' || (t.cooldown && t.cooldown > 0);
+      tb.appendChild(h('tr', null,
+        h('td', null, playerLink(t), t.npc ? h('span', { class: 'muted small' }, ' (training target)') : null, t.faction ? h('span', { class: 'muted small' }, ' [' + t.faction + ']') : null),
+        h('td', null, t.level), h('td', null, t.rank), h('td', { class: 'status-' + t.status }, t.status),
+        h('td', null, h('button', { class: 'btn danger small', disabled: blocked, onclick: () => attack(t.id, out) },
+          t.cooldown > 0 ? 'Cooldown ' + mmss(t.cooldown) : 'Attack'))));
+    });
+    main.appendChild(h('div', { class: 'panel table-wrap' }, h('table', null,
+      h('thead', null, h('tr', null, ['Soldier', 'Lv', 'Rank', 'Status', ''].map((x) => h('th', null, x)))), tb)));
+  };
+  async function attack(id, out) {
+    const d = await act('attack', { p_target: id });
+    if (!d) return;
+    out.textContent = '';
+    out.appendChild(h('div', { class: 'notice' + (d.result === 'win' ? '' : ' red') }, d.message));
+    out.appendChild(h('div', { class: 'log' }, d.log.map((l) => h('div', null, l))));
+    out.appendChild(h('p', null, h('a', { onclick: () => go('battlefield') }, 'Back to the battlefield')));
+    window.scrollTo(0, 0);
+  }
+
+  views.hospital = async (main) => {
+    main.appendChild(h('h2', null, 'Field Hospital & Stockade'));
+    const m = await call('get_me'); setMe(m);
+    if (m.status === 'Hospital') {
+      const left = (new Date(m.hospital_until) - Date.now()) / 1000;
+      main.appendChild(h('div', { class: 'notice red' }, 'You are recovering for another ' + mmss(left) + '. You will be discharged at full health.',
+        h('div', null, h('button', { class: 'btn primary', onclick: () => act('revive', null, () => go('hospital')) }, 'Pay for emergency treatment (about ' + money(50 * m.level + Math.ceil(left / 60) * 25) + ')'))));
+    } else if (m.status === 'Stockade') {
+      const left = (new Date(m.jail_until) - Date.now()) / 1000;
+      main.appendChild(h('div', { class: 'notice red' }, 'You are held for another ' + mmss(left) + '.',
+        h('div', null, h('button', { class: 'btn primary', onclick: () => act('pay_bail', null, () => go('hospital')) }, 'Pay for release (about ' + money(75 * m.level + Math.ceil(left / 60) * 30) + ')'))));
+    } else {
+      main.appendChild(h('div', { class: 'notice' }, 'You are fit for duty. Health regenerates 10% every 5 minutes.'));
+    }
+    const list = await call('hospital_list');
+    const p = h('div', { class: 'panel' }, h('h3', null, 'Currently hospitalized'));
+    if (!list.length) p.appendChild(h('p', { class: 'muted' }, 'The wards are empty.'));
+    list.forEach((x) => p.appendChild(h('div', { class: 'ev' }, playerLink(x), ' (Lv ' + x.level + ') until ' + when(x.until))));
+    main.appendChild(p);
+  };
+
+  views.armory = async (main) => {
+    main.appendChild(h('h2', null, 'Armory'));
+    main.appendChild(h('p', { class: 'muted' }, 'Weapons add damage, armor reduces damage taken. Items sell back for half price.'));
+    const items = await call('list_items');
+    for (const kind of ['weapon', 'armor']) {
+      const tb = h('tbody');
+      items.filter((i) => i.kind === kind).forEach((i) => tb.appendChild(h('tr', null,
+        h('td', null, h('b', null, i.name), i.equipped ? h('span', { class: 'money small' }, ' (equipped)') : null, h('div', { class: 'muted small' }, i.description)),
+        h('td', null, '+' + i.power), h('td', null, money(i.price)), h('td', null, 'Lv ' + i.min_level), h('td', null, i.owned),
+        h('td', { class: 'inline' },
+          h('button', { class: 'btn small primary', disabled: me.level < i.min_level, onclick: () => act('buy_item', { p_item: i.id }, () => go('armory')) }, 'Buy'),
+          i.owned > 0 && !i.equipped ? h('button', { class: 'btn small', onclick: () => act('equip_item', { p_item: i.id }, () => go('armory')) }, 'Equip') : null,
+          i.equipped ? h('button', { class: 'btn small', onclick: () => act('unequip_item', { p_kind: kind }, () => go('armory')) }, 'Unequip') : null,
+          i.owned > 0 ? h('button', { class: 'btn small danger', onclick: () => act('sell_item', { p_item: i.id }, () => go('armory')) }, 'Sell') : null))));
+      main.appendChild(h('div', { class: 'panel table-wrap' }, h('h3', null, kind === 'weapon' ? 'Weapons' : 'Armor'), h('table', null,
+        h('thead', null, h('tr', null, ['Item', 'Power', 'Price', 'Req.', 'Owned', ''].map((x) => h('th', null, x)))), tb)));
+    }
+  };
+
+  views.bank = async (main) => {
+    main.appendChild(h('h2', null, 'War Bank'));
+    const m = await call('get_me'); setMe(m);
+    main.appendChild(h('p', { class: 'muted' }, 'Cash in the bank cannot be taken when you lose a battle. Deposits cost a 1% fee; withdrawals are free.'));
+    const bal = h('div', { class: 'kv' }, h('span', null, 'Cash'), h('span', { class: 'money' }, money(m.cash)), h('span', null, 'Bank'), h('span', { class: 'money' }, money(m.bank)));
+    const amt = h('input', { type: 'number', min: '1', placeholder: 'Amount' });
+    const val = () => parseInt(amt.value, 10);
+    main.appendChild(h('div', { class: 'panel' }, bal));
+    main.appendChild(h('div', { class: 'panel inline' }, amt,
+      h('button', { class: 'btn primary', onclick: () => act('bank_deposit', { p_amount: val() }, () => go('bank')) }, 'Deposit'),
+      h('button', { class: 'btn', onclick: () => act('bank_withdraw', { p_amount: val() }, () => go('bank')) }, 'Withdraw'),
+      h('button', { class: 'btn small', onclick: () => { amt.value = me.cash; } }, 'All cash'),
+      h('button', { class: 'btn small', onclick: () => { amt.value = me.bank; } }, 'All bank')));
+  };
+
+  views.players = async (main) => {
+    main.appendChild(h('h2', null, 'Soldiers'));
+    const q = h('input', { placeholder: 'Search username', maxlength: '16' });
+    let page = 0;
+    const tb = h('tbody');
+    const load = async () => {
+      const list = await call('list_players', { p_search: q.value, p_page: page });
+      tb.textContent = '';
+      if (!list.length) tb.appendChild(h('tr', null, h('td', { colspan: '5', class: 'muted' }, 'No soldiers found.')));
+      list.forEach((p) => tb.appendChild(h('tr', null, h('td', null, playerLink(p), p.npc ? h('span', { class: 'muted small' }, ' (NPC)') : null, p.staff ? h('span', { class: 'status-Hospital small' }, ' (Staff)') : null),
+        h('td', null, p.level), h('td', null, p.rank), h('td', null, p.faction ? p.faction.tag : '—'), h('td', { class: 'status-' + p.status }, p.status + (p.online ? ' · online' : '')))));
+    };
+    main.appendChild(h('div', { class: 'panel inline' }, q, h('button', { class: 'btn', onclick: () => { page = 0; load(); } }, 'Search'),
+      h('button', { class: 'btn small', onclick: () => { if (page > 0) { page--; load(); } } }, '‹ Prev'),
+      h('button', { class: 'btn small', onclick: () => { page++; load(); } }, 'Next ›')));
+    main.appendChild(h('div', { class: 'panel table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['Soldier', 'Lv', 'Rank', 'Army', 'Status'].map((x) => h('th', null, x)))), tb)));
+    await load();
+  };
+
+  views.profile = async (main, id) => {
+    const p = await call('get_profile', { p_player: parseInt(id, 10) });
+    main.appendChild(h('h2', null, p.username));
+    main.appendChild(h('div', { class: 'panel' }, h('div', { class: 'kv' },
+      h('span', null, 'Rank'), h('span', null, p.rank + (p.staff ? ' · Command Staff' : '') + (p.npc ? ' · Training target' : '')),
+      h('span', null, 'Level'), h('span', null, p.level),
+      h('span', null, 'Army'), p.faction ? h('a', { href: '#army/' + p.faction.id }, p.faction.name + ' [' + p.faction.tag + ']') : h('span', null, 'None'),
+      h('span', null, 'Status'), h('span', { class: 'status-' + p.status }, p.status + (p.online ? ' · online' : '')),
+      h('span', null, 'Record'), h('span', null, p.wins + ' wins / ' + p.losses + ' losses'),
+      h('span', null, 'Enlisted'), h('span', null, p.joined))));
+    main.appendChild(h('p', { class: 'muted small' }, 'Battle stats, cash and bank balances are private.'));
+    if (p.id !== me.id && !p.staff && p.status === 'Okay' && (p.npc || p.level >= 3)) {
+      const out = h('div');
+      main.appendChild(h('button', { class: 'btn danger', onclick: () => attack(p.id, out) }, 'Attack ' + p.username + ' (25 energy)'));
+      main.appendChild(out);
+    }
+  };
+
+  views.leaderboards = async (main, kind) => {
+    kind = kind || 'level';
+    main.appendChild(h('h2', null, 'Leaderboards'));
+    const tabs = [['level', 'Level'], ['wins', 'Battle wins'], ['stats', 'Battle strength'], ['wealth', 'Wealth']];
+    main.appendChild(h('div', { class: 'tabs' }, tabs.map(([k, l]) => h('button', { class: 'tab' + (k === kind ? ' active' : ''), onclick: () => go('leaderboards/' + k) }, l))));
+    if (kind === 'stats' || kind === 'wealth') main.appendChild(h('p', { class: 'muted small' }, 'Only the order is shown. Exact numbers are private.'));
+    const list = await call('leaderboard', { p_kind: kind });
+    const tb = h('tbody');
+    list.forEach((p, i) => tb.appendChild(h('tr', null, h('td', null, '#' + (i + 1)), h('td', null, playerLink(p)), h('td', null, p.rank), h('td', null, p.value == null ? '—' : num(p.value)))));
+    if (!list.length) tb.appendChild(h('tr', null, h('td', { colspan: '4', class: 'muted' }, 'No soldiers yet.')));
+    main.appendChild(h('div', { class: 'panel table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['#', 'Soldier', 'Rank', kind === 'wins' ? 'Wins' : kind === 'level' ? 'Level' : ''].map((x) => h('th', null, x)))), tb)));
+  };
+
+  views.events = async (main) => {
+    main.appendChild(h('h2', null, 'Events'));
+    const list = await call('get_events');
+    const p = h('div', { class: 'panel' });
+    if (!list.length) p.appendChild(h('p', { class: 'muted' }, 'No events yet.'));
+    list.forEach((e) => p.appendChild(h('div', { class: 'ev' + (e.seen ? '' : ' unseen') }, h('div', { class: 't' }, when(e.created_at) + ' · ' + e.kind), e.message)));
+    main.appendChild(p);
+    me.unread = 0; renderNav();
+  };
+
+  views.chat = async (main) => {
+    main.appendChild(h('h2', null, 'Radio Chat'));
+    const box = h('div', { class: 'chat-box' });
+    const input = h('input', { maxlength: '200', placeholder: 'Message (max 200 characters)' });
+    let lastId = 0;
+    const load = async () => {
+      try {
+        const list = await call('get_chat');
+        const newest = list.length ? list[list.length - 1].id : 0;
+        if (newest === lastId) return;
+        lastId = newest; box.textContent = '';
+        list.forEach((c) => box.appendChild(h('div', { class: 'chat-line' }, h('span', { class: 't' }, when(c.created_at)),
+          h('a', { class: 'u' + (c.staff ? ' staff' : ''), href: '#profile/' + c.player_id }, c.username + ':'), h('span', null, c.message))));
+        box.scrollTop = box.scrollHeight;
+      } catch (e) { /* ignore */ }
+    };
+    const send = async () => { const m = input.value.trim(); if (!m) return; const ok = await act('send_chat', { p_message: m }); if (ok) { input.value = ''; load(); } };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+    main.appendChild(box);
+    main.appendChild(h('div', { class: 'inline' }, input, h('button', { class: 'btn primary', onclick: send }, 'Send')));
+    main.appendChild(h('p', { class: 'muted small' }, 'Be respectful. One message every 4 seconds. Staff can ban abusive players.'));
+    await load();
+    pageTimer = setInterval(load, 5000);
+  };
+
+  views.army = async (main, id) => {
+    if (id) {
+      const f = await call('get_faction', { p_faction: parseInt(id, 10) });
+      main.appendChild(h('h2', null, f.name + ' [' + f.tag + ']'));
+      if (f.description) main.appendChild(h('div', { class: 'panel' }, f.description));
+      const inIt = me.faction && me.faction.id === f.id;
+      main.appendChild(h('div', { class: 'inline', style: 'margin-bottom:10px' },
+        !me.faction ? h('button', { class: 'btn primary', onclick: () => act('join_faction', { p_faction: f.id }, () => refreshMe().then(() => go('army/' + f.id))) }, 'Enlist in this army') : null,
+        inIt ? h('button', { class: 'btn danger', onclick: () => { if (confirm('Leave ' + f.name + '?')) act('leave_faction', null, () => refreshMe().then(() => go('army'))); } }, 'Leave army') : null,
+        h('a', { href: '#army' }, 'All armies')));
+      const tb = h('tbody');
+      f.members.forEach((p) => tb.appendChild(h('tr', null, h('td', null, playerLink(p), p.id === f.leader_id ? h('span', { class: 'money small' }, ' (Commander)') : null),
+        h('td', null, p.level), h('td', null, p.rank), h('td', { class: 'status-' + p.status }, p.status))));
+      main.appendChild(h('div', { class: 'panel table-wrap' }, h('h3', null, 'Members (' + f.members.length + ')'), h('table', null, h('thead', null, h('tr', null, ['Soldier', 'Lv', 'Rank', 'Status'].map((x) => h('th', null, x)))), tb)));
+      return;
+    }
+    main.appendChild(h('h2', null, 'Armies'));
+    if (me.faction) main.appendChild(h('div', { class: 'notice' }, 'You serve in ', h('a', { href: '#army/' + me.faction.id }, me.faction.name + ' [' + me.faction.tag + ']'), '.'));
+    const list = await call('list_factions');
+    const tb = h('tbody');
+    list.forEach((f) => tb.appendChild(h('tr', null, h('td', null, h('a', { href: '#army/' + f.id }, f.name), ' [' + f.tag + ']'), h('td', null, f.leader || '—'), h('td', null, f.members), h('td', null, f.total_level))));
+    if (!list.length) tb.appendChild(h('tr', null, h('td', { colspan: '4', class: 'muted' }, 'No armies yet. Found the first one!')));
+    main.appendChild(h('div', { class: 'panel table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['Army', 'Commander', 'Members', 'Total levels'].map((x) => h('th', null, x)))), tb)));
+    if (!me.faction) {
+      const n = h('input', { placeholder: 'Army name (3-24)', maxlength: '24' }), t = h('input', { placeholder: 'Tag (2-5)', maxlength: '5' }), d = h('input', { placeholder: 'Short description (optional)', maxlength: '300' });
+      main.appendChild(h('div', { class: 'panel' }, h('h3', null, 'Found an army ($10,000)'), n, t, d,
+        h('button', { class: 'btn primary', style: 'margin-top:8px', onclick: () => act('create_faction', { p_name: n.value, p_tag: t.value, p_description: d.value }, (r) => refreshMe().then(() => go('army/' + r.id))) }, 'Found army')));
+    }
+  };
+
+  views.settings = async (main) => {
+    main.appendChild(h('h2', null, 'Settings'));
+    const o = h('input', { type: 'password', placeholder: 'Current password', autocomplete: 'current-password' });
+    const n = h('input', { type: 'password', placeholder: 'New password (6+ characters)', autocomplete: 'new-password' });
+    main.appendChild(h('div', { class: 'panel' }, h('h3', null, 'Change password'), o, n,
+      h('button', { class: 'btn primary', style: 'margin-top:8px', onclick: () => act('change_password', { p_old: o.value, p_new: n.value }, () => { o.value = ''; n.value = ''; }) }, 'Change password')));
+    main.appendChild(h('div', { class: 'panel muted small' }, 'Your data: we store only your username, a scrambled (bcrypt) password hash and your game progress. No email address or IP address is stored.'));
+  };
+
+  views.admin = async (main) => {
+    if (!me.is_admin) { main.appendChild(h('div', { class: 'notice red' }, 'Command Staff only.')); return; }
+    main.appendChild(h('h2', null, 'Command (Admin)'));
+    const ann = h('input', { maxlength: '300', placeholder: 'Announcement shown on everyone\'s Home page (empty = clear)' });
+    main.appendChild(h('div', { class: 'panel' }, h('h3', null, 'Global announcement'), h('div', { class: 'inline' }, ann,
+      h('button', { class: 'btn primary', onclick: () => act('admin_announce', { p_message: ann.value }) }, 'Post'))));
+    const q = h('input', { placeholder: 'Search players' });
+    const tb = h('tbody');
+    const detail = h('div');
+    const load = async () => {
+      const list = await call('admin_list_players', { p_search: q.value });
+      tb.textContent = '';
+      list.forEach((p) => tb.appendChild(h('tr', null, h('td', null, p.id), h('td', null, h('a', { onclick: () => showP(p.id) }, p.username), p.npc ? ' (NPC)' : '', p.is_admin ? ' (admin)' : ''),
+        h('td', null, p.level), h('td', null, money(p.cash)), h('td', null, money(p.bank)), h('td', { class: p.banned ? 'status-Hospital' : 'status-Okay' }, p.banned ? 'BANNED' : 'ok'),
+        h('td', null, when(p.last_action)))));
+    };
+    const showP = async (id) => {
+      const p = await call('admin_get_player', { p_player: id });
+      detail.textContent = '';
+      const amt = h('input', { type: 'number', placeholder: '+/- cash' });
+      detail.appendChild(h('div', { class: 'panel' }, h('h3', null, p.username + ' (#' + p.id + ')'), h('div', { class: 'kv' },
+        h('span', null, 'Level / XP'), h('span', null, p.level + ' / ' + num(p.xp)), h('span', null, 'Cash / Bank'), h('span', null, money(p.cash) + ' / ' + money(p.bank)),
+        h('span', null, 'Stats'), h('span', null, 'STR ' + num(p.str) + ' · DEF ' + num(p.def) + ' · SPD ' + num(p.spd) + ' · DEX ' + num(p.dex)),
+        h('span', null, 'HP / Energy / Nerve'), h('span', null, p.hp + ' / ' + p.energy + ' / ' + p.nerve), h('span', null, 'Status'), h('span', null, p.status + (p.banned ? ' · BANNED' : '')),
+        h('span', null, 'Record'), h('span', null, p.wins + 'W / ' + p.losses + 'L'), h('span', null, 'Failed logins'), h('span', null, p.failed_logins),
+        h('span', null, 'Active sessions'), h('span', null, p.sessions), h('span', null, 'Created'), h('span', null, when(p.created_at))),
+        h('div', { class: 'inline', style: 'margin-top:10px' },
+          h('button', { class: 'btn danger', onclick: () => act('admin_set_ban', { p_player: id, p_banned: !p.banned }, () => { load(); showP(id); }) }, p.banned ? 'Unban' : 'Ban'),
+          amt, h('button', { class: 'btn', onclick: () => act('admin_adjust_cash', { p_player: id, p_delta: parseInt(amt.value, 10) }, () => { load(); showP(id); }) }, 'Give/take cash'),
+          h('button', { class: 'btn danger', onclick: () => { if (confirm('Reset ' + p.username + ' to a fresh level 1 soldier?')) act('admin_reset_player', { p_player: id }, () => { load(); showP(id); }); } }, 'Reset player'))));
+      detail.scrollIntoView();
+    };
+    main.appendChild(h('div', { class: 'panel inline' }, q, h('button', { class: 'btn', onclick: load }, 'Search')));
+    main.appendChild(detail);
+    main.appendChild(h('div', { class: 'panel table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['#', 'Player', 'Lv', 'Cash', 'Bank', 'Status', 'Last active'].map((x) => h('th', null, x)))), tb)));
+    const evp = h('div', { class: 'panel' }, h('h3', null, 'Recent events (all players)'));
+    main.appendChild(evp);
+    await load();
+    const evs = await call('admin_recent_events');
+    evs.slice(0, 50).forEach((e) => evp.appendChild(h('div', { class: 'ev' }, h('div', { class: 't' }, when(e.created_at) + ' · ' + e.username + ' · ' + e.kind), e.message)));
+  };
+
+  // ---------- start ----------
+  function startGame(page) {
+    $('auth').classList.add('hidden'); $('game').classList.remove('hidden');
+    timers.forEach(clearInterval);
+    timers = [setInterval(updateTimers, 1000), setInterval(refreshMe, 60000)];
+    if (page && location.hash !== '#' + page) location.hash = page; else route();
+  }
+  (async function init() {
+    setAuthMode('login');
+    if (!token) { $('auth').classList.remove('hidden'); return; }
+    try { setMe(await call('get_me')); startGame(); }
+    catch (e) { logoutLocal(); }
+  })();
+})();

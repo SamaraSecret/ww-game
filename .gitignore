@@ -1,0 +1,14 @@
+# Never commit secrets or local data
+.env
+.env.*
+*.secret
+*secret*
+*credentials*
+*.pem
+*.key
+supabase/.temp/
+supabase/.branches/
+node_modules/
+*.log
+*.png
+.DS_Store

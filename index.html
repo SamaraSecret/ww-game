@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Iron Front: World War</title>
+<meta name="description" content="A text-based multiplayer World War strategy game.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src https://gmkpyzazzwwigmxytfgn.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="auth" class="auth hidden">
+  <div class="auth-box">
+    <h1>&#9733; IRON FRONT &#9733;</h1>
+    <p class="tag">A text-based World War strategy game</p>
+    <div class="tabs">
+      <button id="tab-login" class="tab active" type="button">Log in</button>
+      <button id="tab-register" class="tab" type="button">Enlist</button>
+      <button id="tab-admin" class="tab" type="button">Admin</button>
+    </div>
+    <form id="auth-form" autocomplete="on">
+      <p id="auth-hint" class="muted">Welcome back, soldier.</p>
+      <label>Username <input id="auth-user" name="username" autocomplete="username" maxlength="16" required></label>
+      <label>Password <input id="auth-pass" name="password" type="password" autocomplete="current-password" maxlength="72" required></label>
+      <button id="auth-submit" class="btn primary" type="submit">Log in</button>
+      <p id="auth-msg" class="msg"></p>
+    </form>
+    <p class="small muted">Do not reuse a password from another site.</p>
+  </div>
+</div>
+
+<div id="game" class="hidden">
+  <header class="topbar">
+    <button id="menu-btn" class="menu-btn" type="button" aria-label="Menu">&#9776;</button>
+    <span class="logo">&#9733; IRON FRONT</span>
+    <span id="top-user" class="top-user"></span>
+  </header>
+  <div class="layout">
+    <aside id="sidebar" class="sidebar">
+      <div class="statbox">
+        <div class="who"><b id="sb-name"></b> <span id="sb-rank" class="muted"></span></div>
+        <div class="row"><span>Level</span><b id="sb-level"></b></div>
+        <div class="row"><span>Cash</span><b id="sb-cash" class="money"></b></div>
+        <div class="row"><span>Status</span><b id="sb-status"></b></div>
+        <div class="bar-label"><span>Energy</span><span id="sb-energy-t"></span></div>
+        <div class="bar"><div id="sb-energy" class="fill energy"></div></div>
+        <div class="bar-label"><span>Nerve</span><span id="sb-nerve-t"></span></div>
+        <div class="bar"><div id="sb-nerve" class="fill nerve"></div></div>
+        <div class="bar-label"><span>Health</span><span id="sb-hp-t"></span></div>
+        <div class="bar"><div id="sb-hp" class="fill hp"></div></div>
+        <div class="bar-label"><span>XP</span><span id="sb-xp-t"></span></div>
+        <div class="bar"><div id="sb-xp" class="fill xp"></div></div>
+      </div>
+      <nav id="nav" class="nav"></nav>
+    </aside>
+    <main id="main" class="main"></main>
+  </div>
+</div>
+<div id="toast" class="toast hidden"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
